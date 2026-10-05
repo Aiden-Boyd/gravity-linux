@@ -6,6 +6,7 @@ on:
       - m4-pro-j614s-dev-qa
       - m4-pro-j614s-pcie-foundation
       - m4-pro-j614s-sd-v2
+      - m4-pro-j614s-sd-integration
   workflow_dispatch:
 
 permissions:

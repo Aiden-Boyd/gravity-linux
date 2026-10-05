@@ -18,6 +18,14 @@
 	};
 };
 
+&smc_mbox {
+	status = "okay";
+};
+
+&smc {
+	status = "okay";
+};
+
 &pinctrl_ap {
 	status = "okay";
 };
