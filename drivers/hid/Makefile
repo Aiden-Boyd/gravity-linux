@@ -186,3 +186,5 @@ obj-$(CONFIG_HID_DOCKCHANNEL)   += dockchannel-hid/
 obj-$(CONFIG_SURFACE_HID_CORE)  += surface-hid/
 
 obj-$(CONFIG_INTEL_THC_HID)     += intel-thc-hid/
+
+obj-$(CONFIG_APPLE_DOCKCHANNEL_HID)	+= apple-dockchannel-hid/
