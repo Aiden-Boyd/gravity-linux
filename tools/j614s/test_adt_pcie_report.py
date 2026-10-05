@@ -16,10 +16,10 @@ class AdtPcieReportTests(unittest.TestCase):
             "IORegistryEntryName": "root",
             "IORegistryEntryChildren": [{
                 "IORegistryEntryName": "arm-io",
-                "compatible": b"arm-io,t6040\\0",
+                "compatible": b"arm-io,t6040\0",
                 "IORegistryEntryChildren": [{
                     "IORegistryEntryName": "apcie@1cb0000000",
-                    "compatible": b"apcie,t6040\\0",
+                    "compatible": b"apcie,t6040\0",
                     "reg": bytes.fromhex(
                         "0000001c b0000000 00000000 10000000"
                     ),
@@ -34,7 +34,7 @@ class AdtPcieReportTests(unittest.TestCase):
                     }],
                 }, {
                     "IORegistryEntryName": "dart-apcie1",
-                    "compatible": b"dart,t8110\\0",
+                    "compatible": b"dart,t8110\0",
                     "reg": (
                         (0x4).to_bytes(4, "big") +
                         (0x11000000).to_bytes(4, "big")
@@ -48,6 +48,10 @@ class AdtPcieReportTests(unittest.TestCase):
         by_name = {node["name"]: node for node in nodes}
         self.assertIn("apcie@1cb0000000", by_name)
         self.assertIn("dart-apcie1", by_name)
+        self.assertEqual(
+            by_name["apcie@1cb0000000"]["compatible"],
+            ["apcie,t6040"],
+        )
         reg = by_name["apcie@1cb0000000"]["properties"]["reg"]
         self.assertEqual(reg["cells"][0], "0x0000001c")
         self.assertEqual(reg["cells"][1], "0xb0000000")
