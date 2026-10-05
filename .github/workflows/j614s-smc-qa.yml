@@ -70,4 +70,4 @@ jobs:
       - name: Check whitespace
         run: |
           git fetch --depth=1 origin gravity-m4:refs/remotes/origin/gravity-m4
-          git diff --check origin/gravity-m4..m4-pro-j614s-smc
+          git diff --check origin/gravity-m4..HEAD
