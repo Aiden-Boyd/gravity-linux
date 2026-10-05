@@ -1,0 +1,64 @@
+// SPDX-License-Identifier: GPL-2.0+ OR MIT
+/*
+ * Apple MacBook Pro (14-inch, M4 Pro, 2024) J614s SD bring-up
+ *
+ * Enable only the measured PCIe path required by the internal Genesys
+ * Logic GL9755 SD-card reader. Other PCIe root ports remain disabled.
+ */
+
+/dts-v1/;
+
+#include "t6040-j614s.dts"
+
+/ {
+	model = "Apple MacBook Pro (14-inch, M4 Pro, 2024) J614s [SD bring-up]";
+
+	aliases {
+		mmc0 = &sdhci0;
+	};
+};
+
+&smc_mbox {
+	status = "okay";
+};
+
+&smc {
+	status = "okay";
+};
+
+&pinctrl_ap {
+	status = "okay";
+};
+
+&pcie0_dart_1 {
+	status = "okay";
+};
+
+&pcie0 {
+	/*
+	 * Only root port 1 is active in this diagnostic variant, so keep
+	 * the host IOMMU map scoped to its enabled DART. This mirrors the
+	 * board-level override used on existing Apple PCIe platforms when
+	 * unused DARTs remain disabled.
+	 */
+	iommu-map = <0x200 &pcie0_dart_1 1 1>;
+	status = "okay";
+};
+
+&port01 {
+	/*
+	 * J614s ADT function-sd_pwr_en is the SMC gP19 endpoint-enable
+	 * line. The GL9755 path has been hardware-tested with this GPIO.
+	 */
+	pwren-gpios = <&smc_gpio 0x19 GPIO_ACTIVE_HIGH>;
+	max-link-speed = <1>;
+	bus-range = <2 2>;
+	status = "okay";
+
+	sdhci0: mmc@0,0 {
+		compatible = "pci17a0,9755";
+		reg = <0x20000 0x0 0x0 0x0 0x0>;
+		cd-inverted;
+		wp-inverted;
+	};
+};
