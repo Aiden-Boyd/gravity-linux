@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 import importlib.util
 from pathlib import Path
+import plistlib
 import unittest
 
 MODULE_PATH = Path(__file__).with_name("adt_pcie_report.py")
@@ -66,6 +67,32 @@ class AdtPcieReportTests(unittest.TestCase):
         self.assertEqual(report["status"], "evidence_collected")
         self.assertFalse(report["ready_to_boot"])
         self.assertTrue(report["read_only"])
+
+    def test_ioreg_archive_requests_all_properties(self):
+        calls = []
+        payload = plistlib.dumps(self.sample_archive())
+
+        def fake_run(command):
+            calls.append(command)
+            return payload
+
+        archive = REPORT.read_iodevicetree(run=fake_run)
+        self.assertIsNotNone(archive)
+        self.assertEqual(calls[0], [
+            "/usr/sbin/ioreg", "-p", "IODeviceTree", "-l", "-a"
+        ])
+
+    def test_empty_property_capture_is_rejected(self):
+        archive = [{
+            "IORegistryEntryName": "Root",
+            "IORegistryEntryChildren": [{
+                "IORegistryEntryName": "apcie0",
+            }],
+        }]
+        report = REPORT.collect(archive=archive, system="Linux")
+        self.assertEqual(report["status"], "evidence_incomplete")
+        self.assertEqual(report["property_nodes"], 0)
+        self.assertFalse(report["ready_to_boot"])
 
     def test_live_mode_rejects_non_macos_hosts(self):
         report = REPORT.collect(system="Linux")
