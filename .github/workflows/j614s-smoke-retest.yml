@@ -45,6 +45,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: j614s-smoke-retest-${{ github.sha }}
-          path: qemu-boot.log
+          path: |
+            qemu-boot.log
+            kernel-artifacts/kernel.config
+            kernel-artifacts/System.map
           if-no-files-found: warn
           retention-days: 14
