@@ -60,3 +60,11 @@
 		firmware-name = "apple/tpmtfw-j614s.bin";
 	};
 };
+
+&smc_mbox {
+	status = "okay";
+};
+
+&smc {
+	status = "okay";
+};
