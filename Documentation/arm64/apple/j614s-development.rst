@@ -99,6 +99,27 @@ Sources:
 * https://github.com/GravityLinux/bootloader/blob/main/README.md
 * https://github.com/GravityLinux/installer/blob/main/README.md
 
+Read-only PCIe/SD hardware evidence
+-----------------------------------
+
+Before adding PCIe, DART or SD-card nodes to the J614s device tree, collect
+the exact controller layout from the target Mac instead of copying addresses
+from another Apple SoC or an experimental branch. In macOS, run::
+
+    python3 tools/j614s/adt_pcie_report.py --output j614s-pcie-report.json
+
+The collector uses only ``sysctl``, ``sw_vers`` and
+``ioreg -p IODeviceTree -a``. It does not require sudo and does not invoke
+``diskutil``, ``csrutil``, ``bputil``, ``kmutil`` or ``nvram``. It exports a
+small allow-listed set of structural Device Tree properties for PCIe, DART,
+SMC and SD-related nodes. Serial numbers, MAC/Bluetooth addresses,
+calibration blobs and other unique identifiers are not exported.
+
+The report is hardware evidence, not boot approval. Keep PCIe/SD support in a
+disabled-by-default or bring-up-only DT until the captured J614s values have
+been reconciled with the kernel driver and the matching m1n1 PCIe support.
+Internal NVMe remains outside this evidence pass.
+
 Read-only target report and recovery prerequisites
 -------------------------------------------------
 
