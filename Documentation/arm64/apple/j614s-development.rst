@@ -115,6 +115,15 @@ small allow-listed set of structural Device Tree properties for PCIe, DART,
 SMC and SD-related nodes. Serial numbers, MAC/Bluetooth addresses,
 calibration blobs and other unique identifiers are not exported.
 
+The reviewed GravityLinux/bootloader revision
+``950e6b7f268e71cf77889f27a760782bf898b651`` already contains the
+T8132/T6040 PCIe initialization added by commit
+``0c1ba6b65a1426aeb60acfa11ff0e068a3d0ba84``. That loader change handles
+the M4-generation PHY reset-bit difference. The Linux Apple PCIe driver does
+not currently reproduce that low-level reset sequence; existing T8132 device
+trees bind through the ``apple,t6020-pcie`` fallback. Therefore do not add a
+speculative T6040 PCIe C-driver variant unless captured hardware evidence
+shows a Linux-visible register-layout difference.
 The report is hardware evidence, not boot approval. Keep PCIe/SD support in a
 disabled-by-default or bring-up-only DT until the captured J614s values have
 been reconciled with the kernel driver and the matching m1n1 PCIe support.
