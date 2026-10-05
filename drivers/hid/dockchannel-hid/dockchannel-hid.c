@@ -188,7 +188,7 @@ struct dchid_iface {
 
 	u32 keyboard_layout_id;
 
-	/* A registration ACK does not relinquish coprocessor DMA ownership. */
+	/* Firmware may retain DMA ownership after registration. */
 	void *firmware;
 	dma_addr_t firmware_dma;
 	size_t firmware_size;
@@ -315,7 +315,7 @@ static void dchid_cancel_commands(struct dockchannel_hid *dchid, int error)
 
 static void dchid_fail(struct dockchannel_hid *dchid, int error)
 {
-	/* No speculative resynchronization after loss of a frame boundary. */
+	/* Stop processing after losing frame synchronization. */
 	WRITE_ONCE(dchid->failed, true);
 	dchid_cancel_commands(dchid, error);
 }
@@ -462,11 +462,7 @@ static int dchid_reset_interface(struct dchid_iface *iface, int state)
 	if (!iface->dchid->use_ring)
 		return dchid_comm_cmd(iface->dchid, msg, sizeof(msg));
 
-	/*
-	 * T8132 boot capture: state 0 then 2, each with byte 4 equal to 0
-	 * then 1. This is only the observed provisioning sequence, not a
-	 * contract for suspend, wake, or arbitrary interface power changes.
-	 */
+	/* T8132 uses the observed two-step reset sequence. */
 	ret = dchid_comm_cmd(iface->dchid, msg2, sizeof(msg2));
 	if (ret < 0)
 		return ret;
@@ -486,7 +482,7 @@ static int dchid_register_ring(struct dockchannel_hid *dchid)
 		.addr = cpu_to_le64(dchid->ring_dma),
 		.size = cpu_to_le32(DCHID_RING_SIZE),
 	};
-	/* Observed in both macOS and standalone T8132 bringup before 0x91. */
+	/* Prepare the ring before registration. */
 	u8 prepare[] = { 0xc1, 0x02 };
 	int ret = 0;
 
@@ -605,10 +601,7 @@ static int dchid_request_gpio(struct dchid_iface *iface)
 {
 	char prop_name[MAX_GPIO_NAME + 16];
 
-	/*
-	 * The older cmd-3 GPIO pulse has not been established for the T8132
-	 * SMC reset keys. Do not substitute a guessed software pulse.
-	 */
+	/* T8132 does not use the legacy host GPIO reset path. */
 	if (iface->dchid->use_ring) {
 		dev_err_once(iface->dchid->dev, "T8132 SMC reset GPIO operation is not established\n");
 		return -EOPNOTSUPP;
@@ -1488,7 +1481,7 @@ static void dockchannel_hid_remove(struct platform_device *pdev)
 	dchid_cancel_commands(dchid, -ESHUTDOWN);
 	dockchannel_cancel(dchid->dc);
 
-	/* Finish discovery before enumerating interfaces, then join creators. */
+	/* Drain discovery work before tearing interfaces down. */
 	flush_workqueue(dchid->comm->wq);
 	destroy_workqueue(dchid->new_iface_wq);
 	for (i = 0; i < MAX_INTERFACES; i++) {
@@ -1507,7 +1500,7 @@ static void dockchannel_hid_remove(struct platform_device *pdev)
 	mutex_lock(&dchid->tx_mutex);
 	mutex_unlock(&dchid->tx_mutex);
 
-	/* RUN-clear alone is not a DMA ownership boundary. */
+	/* Stop RTKit before releasing DMA buffers. */
 	dma_stopped = !apple_rtkit_helper_stop(dchid->helper_link->supplier);
 	if (!dma_stopped) {
 		dev_crit(dchid->dev, "Retaining HID DMA buffers after failed shutdown; reboot required\n");
