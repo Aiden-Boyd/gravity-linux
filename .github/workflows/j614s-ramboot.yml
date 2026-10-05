@@ -1,0 +1,101 @@
+name: J614s RAM Boot Artifact
+
+on:
+  push:
+    branches:
+      - j614s-ramboot-test-v1
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            bc bison build-essential clang cpio device-tree-compiler flex \
+            gcc-aarch64-linux-gnu libc6-dev-arm64-cross \
+            libelf-dev libssl-dev lld llvm make
+
+      - name: Configure conservative J614s kernel
+        run: |
+          make ARCH=arm64 LLVM=1 defconfig
+
+          scripts/config --disable CONFIG_ARM64_4K_PAGES
+          scripts/config --enable CONFIG_ARM64_16K_PAGES
+
+          scripts/config --enable CONFIG_BLK_DEV_INITRD
+          scripts/config --enable CONFIG_DEVTMPFS
+          scripts/config --enable CONFIG_DEVTMPFS_MOUNT
+          scripts/config --enable CONFIG_SERIAL_SAMSUNG
+          scripts/config --enable CONFIG_SERIAL_SAMSUNG_CONSOLE
+
+          # Keep first physical boot intentionally narrow.
+          scripts/config --disable CONFIG_NVME_APPLE
+          scripts/config --disable CONFIG_BLK_DEV_NVME
+          scripts/config --disable CONFIG_PCIE_APPLE
+          scripts/config --disable CONFIG_MFD_MACSMC
+          scripts/config --disable CONFIG_WLAN
+          scripts/config --disable CONFIG_BT
+          scripts/config --disable CONFIG_MMC
+          scripts/config --disable CONFIG_USB
+
+          make ARCH=arm64 LLVM=1 olddefconfig
+
+          grep -qx 'CONFIG_ARM64_16K_PAGES=y' .config
+          grep -qx 'CONFIG_SERIAL_SAMSUNG=y' .config
+          grep -qx 'CONFIG_SERIAL_SAMSUNG_CONSOLE=y' .config
+          grep -qx '# CONFIG_NVME_APPLE is not set' .config
+          grep -qx '# CONFIG_PCIE_APPLE is not set' .config
+          grep -qx '# CONFIG_MFD_MACSMC is not set' .config
+
+      - name: Build kernel and base J614s DTB
+        run: |
+          make -j"$(nproc)" ARCH=arm64 LLVM=1 Image apple/t6040-j614s.dtb
+          gzip -n -9 -c arch/arm64/boot/Image > Image.gz
+
+      - name: Build static RAM-only initramfs
+        run: |
+          rm -rf ramroot
+          mkdir -p ramroot/{proc,sys,dev}
+          aarch64-linux-gnu-gcc -static -Os -s \
+            tools/j614s/ramboot-init.c -o ramroot/init
+
+          (
+            cd ramroot
+            find . -print0 | cpio --null -o --format=newc
+          ) | gzip -n -9 > initramfs-j614s-ramboot.cpio.gz
+
+          file ramroot/init
+          test "$(readelf -h ramroot/init | awk '/Machine:/ {print $2, $3}')" = "AArch64"
+
+      - name: Stage boot bundle
+        run: |
+          mkdir -p j614s-ramboot
+          cp Image.gz j614s-ramboot/
+          cp arch/arm64/boot/dts/apple/t6040-j614s.dtb j614s-ramboot/
+          cp initramfs-j614s-ramboot.cpio.gz j614s-ramboot/
+          cp .config j614s-ramboot/kernel.config
+
+          cat > j614s-ramboot/BOOTARGS.txt <<'EOF'
+          earlycon=apple,s5l-uart console=ttySAC0,1500000 keep_bootcon ignore_loglevel loglevel=8 rdinit=/init panic=-1 nr_cpus=1 maxcpus=1 idle=nop
+          EOF
+
+          sha256sum j614s-ramboot/* > j614s-ramboot/SHA256SUMS
+
+      - name: Upload RAM boot bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: j614s-ramboot-v1
+          path: j614s-ramboot/
+          if-no-files-found: error
