@@ -999,8 +999,8 @@
 			dr_mode = "otg";
 			usb-role-switch;
 			role-switch-default-mode = "host";
-			iommus = <&dwc3_0_dart_0 0>,
-				<&dwc3_0_dart_1 1>;
+			iommus = <&dwc3_0_dart_0 1>,
+				<&dwc3_0_dart_1 14>;
 			power-domains = <&ps_atc0_usb>;
 			resets = <&atcphy0>;
 			phys = <&atcphy0 PHY_TYPE_USB2>, <&atcphy0 PHY_TYPE_USB3>;
@@ -1052,8 +1052,8 @@
 			dr_mode = "otg";
 			usb-role-switch;
 			role-switch-default-mode = "host";
-			iommus = <&dwc3_1_dart_0 0>,
-				<&dwc3_1_dart_1 1>;
+			iommus = <&dwc3_1_dart_0 1>,
+				<&dwc3_1_dart_1 14>;
 			power-domains = <&ps_atc1_usb>;
 			resets = <&atcphy1>;
 			phys = <&atcphy1 PHY_TYPE_USB2>, <&atcphy1 PHY_TYPE_USB3>;
