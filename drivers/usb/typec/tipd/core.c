@@ -885,7 +885,7 @@ static irqreturn_t tps6598x_interrupt(int irq, void *data)
 	struct tps6598x *tps = data;
 	u64 event1[2] = { };
 	u64 event2[2] = { };
-	u32 version;
+	u32 version = 0;
 	u32 status;
 	int ret;
 
@@ -899,8 +899,6 @@ static irqreturn_t tps6598x_interrupt(int irq, void *data)
 	if (TPS_VERSION_HW_VERSION(version) == TPS_VERSION_HW_65987_8_DH ||
 	    TPS_VERSION_HW_VERSION(version) == TPS_VERSION_HW_65987_8_DK)
 		intev_len = TPS_65987_8_INTEVENT_LEN;
-
-	ret = tps6598x_block_read(tps, TPS_REG_INT_EVENT1, event1, intev_len);
 
 	ret = tps6598x_block_read(tps, TPS_REG_INT_EVENT1, event1, intev_len);
 	if (ret) {
