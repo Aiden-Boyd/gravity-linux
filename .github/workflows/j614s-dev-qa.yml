@@ -36,6 +36,7 @@ jobs:
           scripts/config --enable CONFIG_APPLE_RTKIT_HELPER
           scripts/config --enable CONFIG_HID_DOCKCHANNEL
           scripts/config --enable CONFIG_MAILBOX
+          scripts/config --enable CONFIG_APPLE_MAILBOX
           scripts/config --enable CONFIG_APPLE_RTKIT
           scripts/config --enable CONFIG_APPLE_DOCKCHANNEL_MAILBOX
           scripts/config --enable CONFIG_APPLE_DOCKCHANNEL_HID
