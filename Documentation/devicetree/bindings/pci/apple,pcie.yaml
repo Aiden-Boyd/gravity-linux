@@ -47,6 +47,9 @@ properties:
       - items:
           - const: apple,t8132-pcie
           - const: apple,t6020-pcie
+      - items:
+          - const: apple,t6040-pcie
+          - const: apple,t6020-pcie
       - const: apple,t6020-pcie
 
   reg:
@@ -192,6 +195,22 @@ allOf:
         interrupts:
           minItems: 3
           maxItems: 3
+  - if:
+      properties:
+        compatible:
+          contains:
+            const: apple,t6040-pcie
+    then:
+      properties:
+        reg:
+          minItems: 10
+          maxItems: 10
+        reg-names:
+          minItems: 10
+          maxItems: 10
+        interrupts:
+          minItems: 4
+          maxItems: 4
 
 examples:
   - |
