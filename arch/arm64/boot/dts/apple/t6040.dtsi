@@ -375,7 +375,7 @@
 		};
 
 		mtp_hid: hid@514600000 {
-			compatible = "apple,t8122-dockchannel-hid";
+			compatible = "apple,t8122-dockchannel-hid", "apple,dockchannel-hid";
 			reg = <0x5 0x14600000 0x0 0x4000>,
 			      <0x5 0x14c00000 0x0 0xac000>;
 			reg-names = "coproc-asc", "coproc-sram";
