@@ -1,0 +1,65 @@
+name: BCM4388 Rev6 C2 QA
+
+on:
+  push:
+    branches:
+      - brcmfmac-bcm4388-rev6-c2-qa
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            bc bison build-essential clang flex libelf-dev libssl-dev lld llvm make
+
+      - name: Configure ARM64 brcmfmac PCIe
+        run: |
+          make ARCH=arm64 LLVM=1 defconfig
+          scripts/config --enable CONFIG_WIRELESS
+          scripts/config --enable CONFIG_RFKILL
+          scripts/config --enable CONFIG_CFG80211
+          scripts/config --enable CONFIG_WLAN
+          scripts/config --module CONFIG_BRCMFMAC
+          scripts/config --enable CONFIG_BRCMFMAC_PCIE
+          make ARCH=arm64 LLVM=1 olddefconfig
+          grep -qx 'CONFIG_BRCMFMAC=m' .config
+          grep -qx 'CONFIG_BRCMFMAC_PCIE=y' .config
+          make ARCH=arm64 LLVM=1 prepare modules_prepare
+
+      - name: Build brcmfmac PCIe module
+        run: |
+          make ARCH=arm64 LLVM=1 W=1 \
+            M=drivers/net/wireless/broadcom/brcm80211/brcmfmac \
+            modules
+
+      - name: Verify rev6 mapping
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c")
+          s = p.read_text()
+          c2 = 'BRCMF_FW_ENTRY(BRCM_CC_4388_CHIP_ID, 0x00000040, 4388C2)'
+          c0 = 'BRCMF_FW_ENTRY(BRCM_CC_4388_CHIP_ID, 0xFFFFFFF0, 4388C0)'
+          assert c2 in s
+          assert c0 in s
+          assert s.index(c2) < s.index(c0)
+          assert 'BRCMF_FW_CLM_DEF(4388C2, "brcmfmac4388c2-pcie")' in s
+          PY
+
+      - name: Check whitespace
+        run: |
+          git fetch --depth=1 origin gravity-m4:refs/remotes/origin/gravity-m4
+          git diff --check origin/gravity-m4..HEAD
