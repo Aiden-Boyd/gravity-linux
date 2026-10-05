@@ -50,7 +50,8 @@ jobs:
             drivers/pci/controller/pcie-apple.o \
             drivers/pinctrl/pinctrl-apple-gpio.o \
             drivers/gpio/gpio-macsmc.o \
-            drivers/mmc/host/sdhci-pci.o
+            drivers/mmc/host/sdhci-pci-core.o \
+            drivers/mmc/host/sdhci-pci-gli.o
 
       - name: Build J614s SD DTB
         run: |
@@ -64,4 +65,4 @@ jobs:
       - name: Check whitespace
         run: |
           git fetch --depth=1 origin gravity-m4:refs/remotes/origin/gravity-m4
-          git diff --check origin/gravity-m4..m4-pro-j614s-sd
+          git diff --check origin/gravity-m4..HEAD
