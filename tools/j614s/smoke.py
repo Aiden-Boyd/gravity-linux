@@ -23,10 +23,11 @@ def main():
         "-object", "rng-random,id=rng0,filename=/dev/urandom",
         "-device", "virtio-rng-device,rng=rng0",
         "-kernel", args.image, "-initrd", args.initramfs,
-        "-append", "console=ttyAMA0 initcall_debug rdinit=/init panic=-1 j614s.selftest=1",
+        "-append", "console=ttyAMA0 ignore_loglevel initcall_debug sysrq_always_enabled=1 rdinit=/init panic=-1 j614s.selftest=1",
     ]
     output = bytearray()
     sent = False
+    dumped = False
     passed = False
     process = subprocess.Popen(command, stdin=subprocess.PIPE,
                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
@@ -41,6 +42,11 @@ def main():
                     raise RuntimeError("QEMU exited before the shell test passed:\n" +
                                        output[-8192:].decode(errors="replace"))
                 output.extend(chunk)
+            if not dumped and time.monotonic() > deadline - 90:
+                # QEMU stdio multiplexor: serial BREAK then SysRq task dump.
+                process.stdin.write(b"\x01bt")
+                process.stdin.flush()
+                dumped = True
             if not sent and b"j614s> " in output:
                 process.stdin.write(b"printf '%s%s\\n' J614S_INTERACTIVE_ PASS\n")
                 process.stdin.flush()
