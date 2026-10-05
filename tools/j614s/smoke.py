@@ -23,7 +23,7 @@ def main():
         "-object", "rng-random,id=rng0,filename=/dev/urandom",
         "-device", "virtio-rng-device,rng=rng0",
         "-kernel", args.image, "-initrd", args.initramfs,
-        "-append", "console=ttyAMA0 ignore_loglevel initcall_debug sysrq_always_enabled=1 rdinit=/init panic=-1 j614s.selftest=1",
+        "-append", "console=ttyAMA0 ignore_loglevel nokaslr initcall_debug sysrq_always_enabled=1 rdinit=/init panic=-1 j614s.selftest=1",
     ]
     output = bytearray()
     sent = False
@@ -34,7 +34,7 @@ def main():
                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     selector = selectors.DefaultSelector()
     selector.register(process.stdout, selectors.EVENT_READ)
-    deadline = time.monotonic() + 120
+    deadline = time.monotonic() + 45
     try:
         while time.monotonic() < deadline:
             for key, _ in selector.select(timeout=1):
@@ -43,13 +43,13 @@ def main():
                     raise RuntimeError("QEMU exited before the shell test passed:\n" +
                                        output[-8192:].decode(errors="replace"))
                 output.extend(chunk)
-            if not broke and time.monotonic() > deadline - 100:
+            if not broke and time.monotonic() > deadline - 35:
                 process.stdin.write(b"\x01b")
                 process.stdin.flush()
                 broke = True
-            if not dumped and time.monotonic() > deadline - 98:
+            if not dumped and time.monotonic() > deadline - 33:
                 # QEMU stdio multiplexor: serial BREAK then SysRq task dump.
-                process.stdin.write(b"t")
+                process.stdin.write(b"t\x01cinfo registers\nx/32gx $sp\ncpu 1\ninfo registers\nx/32gx $sp\n")
                 process.stdin.flush()
                 dumped = True
             if not sent and b"j614s> " in output:
