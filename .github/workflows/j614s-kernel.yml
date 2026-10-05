@@ -11,6 +11,7 @@ on:
       - 'kernel/**'
       - 'mm/**'
       - 'scripts/**'
+      - 'tools/j614s/**'
       - 'Makefile'
       - 'Kconfig'
   workflow_dispatch:
@@ -89,5 +90,69 @@ jobs:
           path: |
             build.log
             .config
+          if-no-files-found: warn
+          retention-days: 14
+
+  initramfs:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Install native ARM64 userspace tools and source metadata
+        run: |
+          sudo sed -i 's/^Types: deb$/Types: deb deb-src/' /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends busybox-static build-essential binutils
+      - name: Build RAM-only shell
+        run: |
+          bash tools/j614s/build-initramfs.sh /bin/busybox artifacts-initramfs
+          cp /usr/share/doc/busybox-static/copyright artifacts-initramfs/busybox-copyright
+          dpkg-query -W -f='${Package} ${Version} ${Architecture}\n' busybox-static > artifacts-initramfs/busybox-package.txt
+          mkdir -p artifacts-initramfs/busybox-source
+          cd artifacts-initramfs/busybox-source
+          apt-get source --download-only "busybox=$(dpkg-query -W -f='${source:Version}' busybox-static)"
+      - name: Upload development initramfs
+        uses: actions/upload-artifact@v4
+        with:
+          name: j614s-development-initramfs-${{ github.sha }}
+          path: artifacts-initramfs/
+          if-no-files-found: error
+          retention-days: 14
+
+  smoke:
+    needs: [kernel, initramfs]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - uses: actions/download-artifact@v4
+        with:
+          name: j614s-development-kernel-${{ github.sha }}
+          path: kernel-artifacts
+      - uses: actions/download-artifact@v4
+        with:
+          name: j614s-development-initramfs-${{ github.sha }}
+          path: initramfs-artifacts
+      - name: Verify checksums
+        run: |
+          (cd kernel-artifacts && sha256sum -c SHA256SUMS)
+          (cd initramfs-artifacts && sha256sum -c SHA256SUMS)
+      - name: Install QEMU
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends qemu-system-arm
+      - name: Boot into interactive RAM-only shell on QEMU virt
+        run: |
+          python3 tools/j614s/smoke.py kernel-artifacts/Image initramfs-artifacts/initramfs.cpio.gz qemu-boot.log
+      - name: Upload VM boot log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j614s-qemu-boot-log-${{ github.sha }}
+          path: qemu-boot.log
           if-no-files-found: warn
           retention-days: 14
