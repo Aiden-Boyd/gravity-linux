@@ -23,6 +23,18 @@ config ARM_MHU_V2
 	  Say Y here if you want to build the ARM MHUv2 controller driver,
 	  which provides unidirectional mailboxes between processing elements.
 
+config APPLE_DOCKCHANNEL
+	tristate "Apple DockChannel FIFO mailbox"
+	depends on ARCH_APPLE || COMPILE_TEST
+	depends on HAS_IOMEM
+	depends on OF
+	help
+	  DockChannel is a hardware FIFO used on Apple Silicon SoCs for
+	  communication between the application processor and co-processors.
+	  This driver exposes DockChannel FIFOs through the mailbox framework.
+
+	  Say Y here if you have an M2 or later Apple MacBook.
+
 config ARM_MHU_V3
 	tristate "ARM MHUv3 Mailbox"
 	depends on ARM64 || COMPILE_TEST
