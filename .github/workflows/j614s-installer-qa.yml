@@ -1,0 +1,66 @@
+name: J614s Installer QA
+
+on:
+  push:
+    branches:
+      - j614s-installer-v1-qa
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check local files
+        run: |
+          bash -n tools/j614s/installer/bootstrap.sh
+          python3 -m py_compile tools/j614s/installer/patch_installer.py
+          python3 -m json.tool tools/j614s/installer/installer_data.json >/dev/null
+
+      - name: Fetch reviewed Asahi installer source
+        run: |
+          git clone --depth=1 https://github.com/AsahiLinux/asahi-installer.git /tmp/asahi
+
+      - name: Patch source-tree layout
+        run: |
+          cp -a /tmp/asahi /tmp/asahi-source
+          python3 tools/j614s/installer/patch_installer.py /tmp/asahi-source
+          python3 -m py_compile /tmp/asahi-source/src/main.py /tmp/asahi-source/src/stub.py
+          grep -q '0x6040: "26.5.2"' /tmp/asahi-source/src/main.py
+          grep -q '"j614sap": Device("26.5.2", True)' /tmp/asahi-source/src/main.py
+          grep -q 'def copy_aea_compress' /tmp/asahi-source/src/stub.py
+
+      - name: Patch flattened release layout
+        run: |
+          mkdir -p /tmp/asahi-flat
+          cp /tmp/asahi/src/main.py /tmp/asahi-flat/main.py
+          cp /tmp/asahi/src/stub.py /tmp/asahi-flat/stub.py
+          python3 tools/j614s/installer/patch_installer.py /tmp/asahi-flat
+          python3 -m py_compile /tmp/asahi-flat/main.py /tmp/asahi-flat/stub.py
+          grep -q '0x6040: "26.5.2"' /tmp/asahi-flat/main.py
+          grep -q 'base_system_src.endswith(".aea")' /tmp/asahi-flat/stub.py
+
+      - name: Verify tethered-only profile
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          data = json.loads(Path("tools/j614s/installer/installer_data.json").read_text())
+          assert list(data) == ["os_list"]
+          assert len(data["os_list"]) == 1
+          profile = data["os_list"][0]
+          assert profile["expert"] is True
+          assert profile["boot_object"] == "m1n1.bin"
+          assert profile["supported_fw"] == ["26.5.2"]
+          assert profile["partitions"] == []
+          PY
+
+      - name: Check whitespace
+        run: git diff --check
