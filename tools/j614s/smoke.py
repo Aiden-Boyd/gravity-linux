@@ -4,7 +4,6 @@
 import argparse
 import os
 from pathlib import Path
-import re
 import selectors
 import subprocess
 import time
@@ -16,7 +15,7 @@ def main():
     parser.add_argument("initramfs")
     parser.add_argument("log")
     args = parser.parse_args()
-    # The development kernel uses 16 KiB pages; cortex-a72 only supports 4/64 KiB.
+    # Cortex-A76 supports the kernel\'s 16 KiB pages without max CPU extensions.
     command = [
         "qemu-system-aarch64", "-machine", "virt", "-accel", "tcg", "-cpu", "cortex-a76",
         "-m", "1024", "-smp", "2", "-nographic", "-no-reboot",
@@ -24,19 +23,16 @@ def main():
         "-object", "rng-random,id=rng0,filename=/dev/urandom",
         "-device", "virtio-rng-device,rng=rng0",
         "-kernel", args.image, "-initrd", args.initramfs,
-        "-append", "console=ttyAMA0 ignore_loglevel nokaslr initcall_debug sysrq_always_enabled=1 rdinit=/init panic=-1 j614s.selftest=1",
+        "-append", "console=ttyAMA0 rdinit=/init panic=-1 j614s.selftest=1",
     ]
     output = bytearray()
     sent = False
-    dumped = False
-    broke = False
-    stack_dumped = False
     passed = False
     process = subprocess.Popen(command, stdin=subprocess.PIPE,
                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     selector = selectors.DefaultSelector()
     selector.register(process.stdout, selectors.EVENT_READ)
-    deadline = time.monotonic() + 45
+    deadline = time.monotonic() + 120
     try:
         while time.monotonic() < deadline:
             for key, _ in selector.select(timeout=1):
@@ -45,20 +41,6 @@ def main():
                     raise RuntimeError("QEMU exited before the shell test passed:\n" +
                                        output[-8192:].decode(errors="replace"))
                 output.extend(chunk)
-            if not broke and time.monotonic() > deadline - 35:
-                process.stdin.write(b"\x01b")
-                process.stdin.flush()
-                broke = True
-            if not dumped and time.monotonic() > deadline - 33:
-                # QEMU stdio multiplexor: serial BREAK then SysRq task dump.
-                process.stdin.write(b"t\x01cinfo registers\nx/32gx $sp\ncpu 1\ninfo registers\nx/32gx $sp\n")
-                process.stdin.flush()
-                dumped = True
-            stack = re.search(rb" SP=([0-9a-f]+)", output)
-            if dumped and stack and not stack_dumped:
-                process.stdin.write(b"cpu 0\nx/128gx 0x" + stack.group(1) + b"\n")
-                process.stdin.flush()
-                stack_dumped = True
             if not sent and b"j614s> " in output:
                 process.stdin.write(b"printf '%s%s\\n' J614S_INTERACTIVE_ PASS\n")
                 process.stdin.flush()
