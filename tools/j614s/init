@@ -1,0 +1,24 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+export PATH=/bin:/sbin
+export HOME=/root
+export PS1='j614s> '
+mount -t devtmpfs devtmpfs /dev || exec /bin/sh
+mount -t proc proc /proc || exec /bin/sh
+mount -t sysfs sysfs /sys || exec /bin/sh
+mount -t tmpfs -o mode=0755 tmpfs /run || exec /bin/sh
+mount -t tmpfs -o mode=1777 tmpfs /tmp || exec /bin/sh
+dmesg > /run/boot.log
+printf '\nJ614S_INITRAMFS_READY\n'
+printf 'RAM-only development shell. No disk is mounted automatically.\n'
+printf 'Boot log: /run/boot.log; sensors: /sys/class/hwmon\n'
+case " $(cat /proc/cmdline) " in
+  *' j614s.selftest=1 '*)
+    /bin/sh -c 'printf "J614S_SHELL_PASS\n"'
+    ;;
+esac
+while :; do
+  setsid cttyhack /bin/sh
+  printf 'Shell exited; restarting.\n'
+  sleep 1
+done
