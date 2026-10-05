@@ -178,9 +178,9 @@ def patch_stub(path: Path) -> None:
     path.write_text(text)
 
 
-def verify(root: Path) -> None:
-    main = (root / "src/main.py").read_text()
-    stub = (root / "src/stub.py").read_text()
+def verify(main_py: Path, stub_py: Path) -> None:
+    main = main_py.read_text()
+    stub = stub_py.read_text()
 
     required = [
         '0x6040: "26.5.2"',
@@ -221,7 +221,7 @@ def main() -> None:
 
     patch_main(main_py)
     patch_stub(stub_py)
-    verify(root)
+    verify(main_py, stub_py)
 
     print("J614s installer patch applied and verified.")
 
