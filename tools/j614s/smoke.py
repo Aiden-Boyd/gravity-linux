@@ -4,6 +4,7 @@
 import argparse
 import os
 from pathlib import Path
+import re
 import selectors
 import subprocess
 import time
@@ -29,6 +30,7 @@ def main():
     sent = False
     dumped = False
     broke = False
+    stack_dumped = False
     passed = False
     process = subprocess.Popen(command, stdin=subprocess.PIPE,
                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
@@ -52,6 +54,11 @@ def main():
                 process.stdin.write(b"t\x01cinfo registers\nx/32gx $sp\ncpu 1\ninfo registers\nx/32gx $sp\n")
                 process.stdin.flush()
                 dumped = True
+            stack = re.search(rb" SP=([0-9a-f]+)", output)
+            if dumped and stack and not stack_dumped:
+                process.stdin.write(b"cpu 0\nx/128gx 0x" + stack.group(1) + b"\n")
+                process.stdin.flush()
+                stack_dumped = True
             if not sent and b"j614s> " in output:
                 process.stdin.write(b"printf '%s%s\\n' J614S_INTERACTIVE_ PASS\n")
                 process.stdin.flush()
