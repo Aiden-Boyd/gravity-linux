@@ -1,0 +1,36 @@
+name: J614s ADT PCIe Report QA
+
+on:
+  push:
+    branches:
+      - m4-pro-j614s-adt-pcie-report
+    paths:
+      - '.github/workflows/j614s-adt-report-qa.yml'
+      - 'tools/j614s/adt_pcie_report.py'
+      - 'tools/j614s/test_adt_pcie_report.py'
+      - 'Documentation/arm64/apple/j614s-development.rst'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Compile Python tools
+        run: |
+          python3 -m py_compile             tools/j614s/adt_pcie_report.py             tools/j614s/test_adt_pcie_report.py
+
+      - name: Run collector unit tests
+        run: python3 tools/j614s/test_adt_pcie_report.py
+
+      - name: Check whitespace
+        run: |
+          git fetch --depth=1 origin gravity-m4:refs/remotes/origin/gravity-m4
+          git diff --check origin/gravity-m4..HEAD
