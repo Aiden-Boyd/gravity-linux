@@ -15,8 +15,9 @@ def main():
     parser.add_argument("initramfs")
     parser.add_argument("log")
     args = parser.parse_args()
+    # The development kernel uses 16 KiB pages; cortex-a72 only supports 4/64 KiB.
     command = [
-        "qemu-system-aarch64", "-machine", "virt", "-cpu", "cortex-a72",
+        "qemu-system-aarch64", "-machine", "virt", "-accel", "tcg", "-cpu", "max",
         "-m", "1024", "-smp", "2", "-nographic", "-no-reboot",
         "-nic", "none",
         "-kernel", args.image, "-initrd", args.initramfs,
