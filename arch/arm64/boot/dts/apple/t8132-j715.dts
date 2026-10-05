@@ -86,6 +86,10 @@
 &mtp_hid {
 	status = "okay";
 
+	multi-touch {
+		firmware-name = "apple/tpmtfw-j715.bin";
+	};
+
 	keyboard: keyboard {
 		hid-country-code = <0>;
 		apple,keyboard-layout-id = <0>;
