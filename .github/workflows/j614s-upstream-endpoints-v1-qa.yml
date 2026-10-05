@@ -34,6 +34,7 @@ jobs:
           scripts/config --enable CONFIG_ARM64_16K_PAGES
           scripts/config --enable CONFIG_MAILBOX
           scripts/config --enable CONFIG_APPLE_MAILBOX
+          scripts/config --enable CONFIG_APPLE_RTKIT
           scripts/config --enable CONFIG_MFD_MACSMC
           scripts/config --enable CONFIG_PCIE_APPLE
           scripts/config --enable CONFIG_PINCTRL_APPLE_GPIO
@@ -50,7 +51,7 @@ jobs:
           scripts/config --enable CONFIG_BT
           scripts/config --enable CONFIG_BT_HCIBCM4377
           make ARCH=arm64 LLVM=1 olddefconfig
-          for symbol in APPLE_MAILBOX MFD_MACSMC PCIE_APPLE PINCTRL_APPLE_GPIO MMC MMC_BLOCK MMC_SDHCI MMC_SDHCI_PCI RFKILL CFG80211 BRCMFMAC BRCMFMAC_PCIE BT BT_HCIBCM4377; do
+          for symbol in APPLE_MAILBOX APPLE_RTKIT MFD_MACSMC PCIE_APPLE PINCTRL_APPLE_GPIO MMC MMC_BLOCK MMC_SDHCI MMC_SDHCI_PCI RFKILL CFG80211 BRCMFMAC BRCMFMAC_PCIE BT BT_HCIBCM4377; do
             grep -qx "CONFIG_${symbol}=y" .config || {
               echo "Required CONFIG_${symbol}=y missing"
               exit 1
