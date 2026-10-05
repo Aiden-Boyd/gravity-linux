@@ -18,6 +18,7 @@ def main():
     command = [
         "qemu-system-aarch64", "-machine", "virt", "-cpu", "cortex-a72",
         "-m", "1024", "-smp", "2", "-nographic", "-no-reboot",
+        "-nic", "none",
         "-kernel", args.image, "-initrd", args.initramfs,
         "-append", "console=ttyAMA0 rdinit=/init panic=-1 j614s.selftest=1",
     ]
@@ -34,7 +35,8 @@ def main():
             for key, _ in selector.select(timeout=1):
                 chunk = os.read(key.fileobj.fileno(), 65536)
                 if not chunk:
-                    raise RuntimeError("QEMU exited before the shell test passed")
+                    raise RuntimeError("QEMU exited before the shell test passed:\n" +
+                                       output[-8192:].decode(errors="replace"))
                 output.extend(chunk)
             if not sent and b"j614s> " in output:
                 process.stdin.write(b"printf '%s%s\\n' J614S_INTERACTIVE_ PASS\n")
