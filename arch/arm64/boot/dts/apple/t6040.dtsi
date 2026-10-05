@@ -310,15 +310,12 @@
 			 */
 			reg = <0x5 0x02400000 0x0 0x1cc000>,
 			      <0x5 0x02440000 0x0 0x4000>;
-
-			config-offset = <0x10000>;
-			cap0-offset = <0x4>;
-			maxnumirq-offset = <0xc>;
+			reg-names = "core", "event";
 			power-domains = <&ps_aic>;
 		};
 
 		wdt: watchdog@50836c000 {
-			compatible = "apple,t6040-wdt", "apple,wdt";
+			compatible = "apple,t6040-wdt", "apple,t8103-wdt";
 			reg = <0x5 0x0836c000 0x0 0x4000>;
 			clocks = <&clkref>;
 			interrupt-parent = <&aic>;
