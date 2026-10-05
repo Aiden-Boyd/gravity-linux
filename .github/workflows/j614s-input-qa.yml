@@ -1,0 +1,65 @@
+name: J614s Input QA
+
+on:
+  push:
+    branches:
+      - m4-pro-j614s-input-qa
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            bc bison build-essential clang device-tree-compiler flex \
+            libelf-dev libssl-dev lld llvm make python3-pip python3-setuptools
+          python3 -m pip install --break-system-packages dtschema
+
+      - name: Configure ARM64
+        run: |
+          make ARCH=arm64 LLVM=1 defconfig
+          scripts/config --enable CONFIG_HID
+          scripts/config --enable CONFIG_INPUT
+          scripts/config --enable CONFIG_APPLE_DOCKCHANNEL
+          scripts/config --enable CONFIG_HID_DOCKCHANNEL
+          make ARCH=arm64 LLVM=1 olddefconfig
+          make ARCH=arm64 LLVM=1 prepare modules_prepare
+
+      - name: Build DockChannel HID
+        run: |
+          make ARCH=arm64 LLVM=1 W=1 \
+            drivers/hid/dockchannel-hid/dockchannel-hid.o
+
+      - name: Build J614s DTBs
+        run: |
+          make ARCH=arm64 LLVM=1 W=1 \
+            arch/arm64/boot/dts/apple/t6040-j614s.dtb \
+            arch/arm64/boot/dts/apple/t6040-j614s-kbd.dtb
+
+      - name: Validate Apple machine binding
+        run: |
+          make dt_binding_check \
+            DT_SCHEMA_FILES=Documentation/devicetree/bindings/arm/apple.yaml
+
+      - name: DT schema checks
+        continue-on-error: true
+        run: |
+          make ARCH=arm64 LLVM=1 CHECK_DTBS=y \
+            arch/arm64/boot/dts/apple/t6040-j614s.dtb \
+            arch/arm64/boot/dts/apple/t6040-j614s-kbd.dtb
+
+      - name: Check whitespace
+        run: |
+          git fetch origin gravity-m4:refs/remotes/origin/gravity-m4
+          git diff --check origin/gravity-m4..m4-pro-j614s-input
