@@ -805,10 +805,10 @@
 			compatible = "apple,t8132-asc-mailbox", "apple,asc-mailbox-v4";
 			reg = <0x3 0x94608000 0x0 0x4000>;
 			interrupt-parent = <&aic>;
-			interrupts = <AIC_IRQ 1113 IRQ_TYPE_LEVEL_HIGH>,
-				     <AIC_IRQ 1114 IRQ_TYPE_LEVEL_HIGH>,
-				     <AIC_IRQ 1115 IRQ_TYPE_LEVEL_HIGH>,
-				     <AIC_IRQ 1116 IRQ_TYPE_LEVEL_HIGH>;
+			interrupts = <AIC_IRQ 1114 IRQ_TYPE_LEVEL_HIGH>,
+				     <AIC_IRQ 1113 IRQ_TYPE_LEVEL_HIGH>,
+				     <AIC_IRQ 1116 IRQ_TYPE_LEVEL_HIGH>,
+				     <AIC_IRQ 1115 IRQ_TYPE_LEVEL_HIGH>;
 			interrupt-names = "send-empty", "send-not-empty",
 					  "recv-empty", "recv-not-empty";
 			#mbox-cells = <0>;
