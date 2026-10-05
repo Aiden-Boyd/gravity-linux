@@ -1,0 +1,50 @@
+name: J614s Smoke Retest
+
+on:
+  push:
+    branches: [m4-pro-j614s-smoke-fix]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - uses: actions/download-artifact@v4
+        with:
+          name: j614s-development-kernel-88eb4f08ae76aae69f87d57f8e5c345fee6639bd
+          run-id: 37302231070
+          github-token: ${{ github.token }}
+          path: kernel-artifacts
+      - uses: actions/download-artifact@v4
+        with:
+          name: j614s-development-initramfs-88eb4f08ae76aae69f87d57f8e5c345fee6639bd
+          run-id: 37302231070
+          github-token: ${{ github.token }}
+          path: initramfs-artifacts
+      - name: Verify existing build artifacts
+        run: |
+          (cd kernel-artifacts && sha256sum -c SHA256SUMS)
+          (cd initramfs-artifacts && sha256sum -c SHA256SUMS)
+      - name: Install QEMU
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends qemu-system-arm
+      - name: Boot RAM-only interactive shell
+        run: |
+          python3 tools/j614s/smoke.py kernel-artifacts/Image initramfs-artifacts/initramfs.cpio.gz qemu-boot.log
+      - name: Upload boot log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j614s-smoke-retest-${{ github.sha }}
+          path: qemu-boot.log
+          if-no-files-found: warn
+          retention-days: 14
