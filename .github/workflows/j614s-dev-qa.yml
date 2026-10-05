@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - m4-pro-j614s-dev-qa
+      - m4-pro-j614s-pcie-foundation
   workflow_dispatch:
 
 permissions:
@@ -43,8 +44,12 @@ jobs:
           scripts/config --enable CONFIG_MFD_MACSMC
           scripts/config --enable CONFIG_HWMON
           scripts/config --enable CONFIG_SENSORS_MACSMC_HWMON
+          scripts/config --disable CONFIG_ARM64_4K_PAGES
+          scripts/config --enable CONFIG_ARM64_16K_PAGES
+          scripts/config --enable CONFIG_PCIE_APPLE
+          scripts/config --enable CONFIG_PINCTRL_APPLE_GPIO
           make ARCH=arm64 LLVM=1 olddefconfig
-          for symbol in APPLE_DOCKCHANNEL_MAILBOX APPLE_DOCKCHANNEL_HID MFD_MACSMC SENSORS_MACSMC_HWMON; do
+          for symbol in APPLE_DOCKCHANNEL_MAILBOX APPLE_DOCKCHANNEL_HID MFD_MACSMC SENSORS_MACSMC_HWMON PCIE_APPLE PINCTRL_APPLE_GPIO; do
             grep -qx "CONFIG_${symbol}=y" .config || {
               echo "Required driver CONFIG_${symbol} was disabled by Kconfig"
               exit 1
@@ -62,17 +67,23 @@ jobs:
             drivers/mailbox/apple-dockchannel.o \
             drivers/hid/apple-dockchannel-hid/apple_dockchannel_hid.o \
             drivers/mfd/macsmc.o \
-            drivers/hwmon/macsmc-hwmon.o
+            drivers/hwmon/macsmc-hwmon.o \
+            drivers/pci/controller/pcie-apple.o \
+            drivers/pinctrl/pinctrl-apple-gpio.o
 
       - name: Build J614s DTBs
         run: |
           make ARCH=arm64 LLVM=1 W=1 \
             apple/t6040-j614s.dtb
 
-      - name: Validate SMC binding
+      - name: Validate J614s bindings
         run: |
           make dt_binding_check \
             DT_SCHEMA_FILES=Documentation/devicetree/bindings/mfd/apple,smc.yaml
+          make dt_binding_check \
+            DT_SCHEMA_FILES=Documentation/devicetree/bindings/pci/apple,pcie.yaml
+          make dt_binding_check \
+            DT_SCHEMA_FILES=Documentation/devicetree/bindings/pinctrl/apple,pinctrl.yaml
 
       - name: Run DT schema checks
         run: |
