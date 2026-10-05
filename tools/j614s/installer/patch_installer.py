@@ -207,11 +207,17 @@ def main() -> None:
     args = parser.parse_args()
 
     root = args.installer_root.resolve()
-    main_py = root / "src/main.py"
-    stub_py = root / "src/stub.py"
 
-    if not main_py.is_file() or not stub_py.is_file():
-        raise SystemExit("not an Asahi installer release tree")
+    # Git checkout layout: <root>/src/main.py
+    # Release tarball layout: <root>/main.py
+    if (root / "main.py").is_file() and (root / "stub.py").is_file():
+        main_py = root / "main.py"
+        stub_py = root / "stub.py"
+    elif (root / "src/main.py").is_file() and (root / "src/stub.py").is_file():
+        main_py = root / "src/main.py"
+        stub_py = root / "src/stub.py"
+    else:
+        raise SystemExit("not an Asahi installer source or release tree")
 
     patch_main(main_py)
     patch_stub(stub_py)
