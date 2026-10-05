@@ -571,6 +571,46 @@
 			};
 		};
 
+		/*
+		 * The SMC MMIO/mailbox mapping comes from the J614s ADT. The
+		 * SRAM base at 0x50de70000 is hardware-observed from RTKit
+		 * buffer requests; the 1 MiB window size follows existing Apple
+		 * SMC descriptions and has not been independently measured on
+		 * T6040. Keep the path disabled until a board variant needs it.
+		 */
+		smc_mbox: mailbox@50c608000 {
+			compatible = "apple,t8140-asc-mailbox", "apple,asc-mailbox-v4";
+			reg = <0x5 0x0c608000 0x0 0x4000>;
+			interrupt-parent = <&aic>;
+			interrupts = <AIC_IRQ 996 IRQ_TYPE_LEVEL_HIGH>,
+				     <AIC_IRQ 997 IRQ_TYPE_LEVEL_HIGH>,
+				     <AIC_IRQ 998 IRQ_TYPE_LEVEL_HIGH>,
+				     <AIC_IRQ 999 IRQ_TYPE_LEVEL_HIGH>;
+			interrupt-names = "send-empty", "send-not-empty",
+					  "recv-empty", "recv-not-empty";
+			#mbox-cells = <0>;
+			status = "disabled";
+		};
+
+		smc: smc@50c600000 {
+			compatible = "apple,t6040-smc", "apple,t8103-smc";
+			reg = <0x5 0x0c600000 0x0 0x4000>,
+			      <0x5 0x0de70000 0x0 0x100000>;
+			reg-names = "smc", "sram";
+			mboxes = <&smc_mbox>;
+			status = "disabled";
+
+			smc_gpio: gpio {
+				compatible = "apple,smc-gpio";
+				gpio-controller;
+				#gpio-cells = <2>;
+			};
+
+			smc_hwmon: hwmon {
+				compatible = "apple,smc-hwmon";
+			};
+		};
+
 		serial0: serial@429200000 {
 			compatible = "apple,s5l-uart";
 			reg = <0x4 0x29200000 0x0 0x1000>;
