@@ -1,0 +1,93 @@
+name: J614s Development Kernel
+
+on:
+  push:
+    branches: [m4-pro-j614s-dev-qa]
+    paths:
+      - '.github/workflows/j614s-kernel.yml'
+      - 'arch/**'
+      - 'drivers/**'
+      - 'include/**'
+      - 'kernel/**'
+      - 'mm/**'
+      - 'scripts/**'
+      - 'Makefile'
+      - 'Kconfig'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  kernel:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            bc bison build-essential clang flex libelf-dev libssl-dev \
+            lld llvm make rsync kmod
+
+      - name: Configure development kernel
+        run: |
+          make ARCH=arm64 LLVM=1 defconfig
+          scripts/config --disable ARM64_4K_PAGES --disable ARM64_64K_PAGES --enable ARM64_16K_PAGES
+          scripts/config --disable RUST
+          scripts/config --set-str LOCALVERSION "-j614s-dev"
+          for symbol in ARCH_APPLE APPLE_AIC APPLE_PMGR_PWRSTATE MAILBOX APPLE_MAILBOX APPLE_RTKIT APPLE_DART HID INPUT APPLE_DOCKCHANNEL_MAILBOX APPLE_DOCKCHANNEL_HID MFD_MACSMC HWMON SENSORS_MACSMC_HWMON SERIAL_SAMSUNG SERIAL_SAMSUNG_CONSOLE FB SIMPLEFB FRAMEBUFFER_CONSOLE BLK_DEV_INITRD DEVTMPFS DEVTMPFS_MOUNT; do
+            scripts/config --enable "$symbol"
+          done
+          make ARCH=arm64 LLVM=1 olddefconfig
+          for symbol in ARM64_16K_PAGES ARCH_APPLE APPLE_AIC APPLE_PMGR_PWRSTATE APPLE_MAILBOX APPLE_RTKIT APPLE_DART APPLE_DOCKCHANNEL_MAILBOX APPLE_DOCKCHANNEL_HID MFD_MACSMC SENSORS_MACSMC_HWMON SERIAL_SAMSUNG_CONSOLE BLK_DEV_INITRD DEVTMPFS; do
+            grep -qx "CONFIG_${symbol}=y" .config || {
+              echo "Required CONFIG_${symbol} was disabled by Kconfig"
+              exit 1
+            }
+          done
+
+      - name: Build linked kernel, modules and board DTB
+        run: |
+          set -o pipefail
+          make -j"$(nproc)" ARCH=arm64 LLVM=1 Image modules apple/t6040-j614s.dtb 2>&1 | tee build.log
+
+      - name: Package reproducible development artifacts
+        run: |
+          mkdir -p artifacts/dtbs artifacts/modules
+          make ARCH=arm64 LLVM=1 INSTALL_MOD_PATH="$PWD/artifacts/modules" modules_install
+          cp arch/arm64/boot/Image artifacts/
+          cp arch/arm64/boot/dts/apple/t6040-j614s.dtb artifacts/dtbs/
+          cp .config artifacts/kernel.config
+          cp System.map artifacts/
+          git rev-parse HEAD > artifacts/source-commit.txt
+          make -s ARCH=arm64 LLVM=1 kernelrelease > artifacts/kernel-release.txt
+          clang --version > artifacts/compiler.txt
+          tar -C artifacts/modules -czf artifacts/modules.tar.gz .
+          rm -rf artifacts/modules
+          printf '%s\n' 'Development build only. No bootloader, root filesystem, firmware or installer is included.' 'J614s hardware boot and recovery are unverified. See Documentation/arm64/apple/j614s-development.rst.' > artifacts/README.txt
+          cd artifacts
+          sha256sum Image dtbs/t6040-j614s.dtb kernel.config System.map modules.tar.gz > SHA256SUMS
+
+      - name: Upload development kernel
+        uses: actions/upload-artifact@v4
+        with:
+          name: j614s-development-kernel-${{ github.sha }}
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: j614s-build-diagnostics-${{ github.sha }}
+          path: |
+            build.log
+            .config
+          if-no-files-found: warn
+          retention-days: 14
