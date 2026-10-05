@@ -189,8 +189,14 @@ def is_safe_property(key):
 
 
 def matches_node(path, node):
-    haystack = " ".join([path, node_name(node), *compatible_strings(node)]).lower()
-    return any(term in haystack for term in MATCH_TERMS)
+    node_haystack = " ".join([node_name(node), *compatible_strings(node)]).lower()
+    if any(term in node_haystack for term in MATCH_TERMS):
+        return True
+
+    # Keep descendants of relevant controller nodes, but do not let the
+    # top-level arm-io match pull the entire Apple Device Tree into the report.
+    ancestor_path = path.lower()
+    return any(term in ancestor_path for term in ("apcie", "pcie", "dart", "smc"))
 
 
 def extract_nodes(archive):
