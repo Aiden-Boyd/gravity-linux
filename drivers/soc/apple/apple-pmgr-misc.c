@@ -49,7 +49,7 @@ static void apple_pmgr_sys_dev_set_pstate(struct apple_pmgr_misc *misc,
 	else
 		pstate = misc->devices[dev].suspend_state;
 
-	printk("set %d ps to pstate %d\n", dev, pstate);
+	dev_dbg(misc->dev, "set %d ps to pstate %d\n", dev, pstate);
 
 	val = readl_relaxed(misc->devices[dev].base + APPLE_CLKGEN_PSTATE);
 	val &= ~APPLE_CLKGEN_PSTATE_DESIRED;
