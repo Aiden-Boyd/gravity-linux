@@ -222,13 +222,15 @@ static int apple_soc_cpufreq_find_cluster(struct cpufreq_policy *policy,
 		return ret;
 
 	match = of_match_node(apple_soc_cpufreq_of_match, args.np);
-	of_node_put(args.np);
-	if (!match)
+	if (!match) {
+		of_node_put(args.np);
 		return -ENODEV;
+	}
 
 	*info = match->data;
 
 	*reg_base = of_iomap(args.np, 0);
+	of_node_put(args.np);
 	if (!*reg_base)
 		return -ENOMEM;
 
