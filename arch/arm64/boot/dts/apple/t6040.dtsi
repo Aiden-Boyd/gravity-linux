@@ -444,13 +444,12 @@
 				     <AIC_IRQ 482 IRQ_TYPE_LEVEL_HIGH>,
 				     <AIC_IRQ 483 IRQ_TYPE_LEVEL_HIGH>,
 				     <AIC_IRQ 484 IRQ_TYPE_LEVEL_HIGH>;
+			status = "disabled";
 
 			pcie_pins: pcie-pins {
 				pinmux = <APPLE_PINMUX(0, 1)>,
 					 <APPLE_PINMUX(1, 1)>;
 			};
-
-			status = "disabled";
 		};
 
 		pcie0_dart_0: iommu@410000000 {
@@ -519,6 +518,7 @@
 
 			pinctrl-0 = <&pcie_pins>;
 			pinctrl-names = "default";
+			status = "disabled";
 
 			port00: pci@0,0 {
 				compatible = "pciclass,0604";
@@ -599,8 +599,6 @@
 						<0 0 0 4 &port03 0 0 0 3>;
 				status = "disabled";
 			};
-
-			status = "disabled";
 		};
 
 		serial0: serial@429200000 {
