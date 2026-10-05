@@ -6,6 +6,7 @@ on:
       - m4-pro-j614s-dev-qa
       - m4-pro-j614s-pcie-foundation
       - m4-pro-j614s-smc-foundation-v2
+      - m4-pro-j614s-sd-v2
   workflow_dispatch:
 
 permissions:
@@ -49,8 +50,12 @@ jobs:
           scripts/config --enable CONFIG_ARM64_16K_PAGES
           scripts/config --enable CONFIG_PCIE_APPLE
           scripts/config --enable CONFIG_PINCTRL_APPLE_GPIO
+          scripts/config --enable CONFIG_MMC
+          scripts/config --enable CONFIG_MMC_BLOCK
+          scripts/config --enable CONFIG_MMC_SDHCI
+          scripts/config --enable CONFIG_MMC_SDHCI_PCI
           make ARCH=arm64 LLVM=1 olddefconfig
-          for symbol in APPLE_DOCKCHANNEL_MAILBOX APPLE_DOCKCHANNEL_HID MFD_MACSMC SENSORS_MACSMC_HWMON PCIE_APPLE PINCTRL_APPLE_GPIO; do
+          for symbol in APPLE_DOCKCHANNEL_MAILBOX APPLE_DOCKCHANNEL_HID MFD_MACSMC SENSORS_MACSMC_HWMON PCIE_APPLE PINCTRL_APPLE_GPIO MMC MMC_BLOCK MMC_SDHCI MMC_SDHCI_PCI; do
             grep -qx "CONFIG_${symbol}=y" .config || {
               echo "Required driver CONFIG_${symbol} was disabled by Kconfig"
               exit 1
@@ -70,12 +75,15 @@ jobs:
             drivers/mfd/macsmc.o \
             drivers/hwmon/macsmc-hwmon.o \
             drivers/pci/controller/pcie-apple.o \
-            drivers/pinctrl/pinctrl-apple-gpio.o
+            drivers/pinctrl/pinctrl-apple-gpio.o \
+            drivers/mmc/host/sdhci-pci-core.o \
+            drivers/mmc/host/sdhci-pci-gli.o
 
       - name: Build J614s DTBs
         run: |
           make ARCH=arm64 LLVM=1 W=1 \
-            apple/t6040-j614s.dtb
+            apple/t6040-j614s.dtb \
+            apple/t6040-j614s-sd.dtb
 
       - name: Validate J614s bindings
         run: |
@@ -89,7 +97,8 @@ jobs:
       - name: Run DT schema checks
         run: |
           make ARCH=arm64 LLVM=1 CHECK_DTBS=y \
-            apple/t6040-j614s.dtb
+            apple/t6040-j614s.dtb \
+            apple/t6040-j614s-sd.dtb
 
       - name: Check whitespace
         run: |
