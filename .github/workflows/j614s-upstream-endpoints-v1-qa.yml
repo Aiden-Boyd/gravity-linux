@@ -1,0 +1,89 @@
+name: J614s Endpoint QA
+
+on:
+  push:
+    branches:
+      - j614s-upstream-endpoints-v1-qa
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            bc bison build-essential clang device-tree-compiler flex \
+            libelf-dev libssl-dev lld llvm make python3-pip python3-setuptools
+          python3 -m pip install --break-system-packages dtschema
+
+      - name: Configure ARM64 endpoint drivers
+        run: |
+          make ARCH=arm64 LLVM=1 defconfig
+          scripts/config --disable CONFIG_ARM64_4K_PAGES
+          scripts/config --enable CONFIG_ARM64_16K_PAGES
+          scripts/config --enable CONFIG_MAILBOX
+          scripts/config --enable CONFIG_APPLE_MAILBOX
+          scripts/config --enable CONFIG_MFD_MACSMC
+          scripts/config --enable CONFIG_PCIE_APPLE
+          scripts/config --enable CONFIG_PINCTRL_APPLE_GPIO
+          scripts/config --enable CONFIG_MMC
+          scripts/config --enable CONFIG_MMC_BLOCK
+          scripts/config --enable CONFIG_MMC_SDHCI
+          scripts/config --enable CONFIG_MMC_SDHCI_PCI
+          scripts/config --enable CONFIG_WIRELESS
+          scripts/config --enable CONFIG_RFKILL
+          scripts/config --enable CONFIG_CFG80211
+          scripts/config --enable CONFIG_WLAN
+          scripts/config --enable CONFIG_BRCMFMAC
+          scripts/config --enable CONFIG_BRCMFMAC_PCIE
+          scripts/config --enable CONFIG_BT
+          scripts/config --enable CONFIG_BT_HCIBCM4377
+          make ARCH=arm64 LLVM=1 olddefconfig
+          for symbol in APPLE_MAILBOX MFD_MACSMC PCIE_APPLE PINCTRL_APPLE_GPIO MMC MMC_BLOCK MMC_SDHCI MMC_SDHCI_PCI RFKILL CFG80211 BRCMFMAC BRCMFMAC_PCIE BT BT_HCIBCM4377; do
+            grep -qx "CONFIG_${symbol}=y" .config || {
+              echo "Required CONFIG_${symbol}=y missing"
+              exit 1
+            }
+          done
+          make ARCH=arm64 LLVM=1 prepare modules_prepare
+
+      - name: Build endpoint driver objects
+        run: |
+          make ARCH=arm64 LLVM=1 W=1 \
+            drivers/soc/apple/mailbox.o \
+            drivers/mfd/macsmc.o \
+            drivers/pci/controller/pcie-apple.o \
+            drivers/pinctrl/pinctrl-apple-gpio.o \
+            drivers/mmc/host/sdhci-pci-core.o \
+            drivers/mmc/host/sdhci-pci-gli.o \
+            drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.o \
+            drivers/bluetooth/hci_bcm4377.o
+
+      - name: Build J614s DTBs
+        run: |
+          make ARCH=arm64 LLVM=1 W=1 \
+            apple/t6040-j614s.dtb \
+            apple/t6040-j614s-sd.dtb \
+            apple/t6040-j614s-wifi.dtb
+
+      - name: Check J614s DT schemas
+        run: |
+          make ARCH=arm64 LLVM=1 CHECK_DTBS=y \
+            apple/t6040-j614s.dtb \
+            apple/t6040-j614s-sd.dtb \
+            apple/t6040-j614s-wifi.dtb
+
+      - name: Check whitespace
+        run: |
+          git diff --check
