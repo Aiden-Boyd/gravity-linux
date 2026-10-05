@@ -1,0 +1,58 @@
+name: M4 MacBook Input QA
+
+on:
+  push:
+    branches:
+      - macbook-m4-input-ci
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  targeted-build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            bc bison build-essential clang device-tree-compiler flex \
+            gcc-aarch64-linux-gnu libelf-dev libssl-dev lld llvm make \
+            python3 python3-pip python3-setuptools
+          python3 -m pip install --break-system-packages dtschema
+
+      - name: Configure arm64
+        run: |
+          make ARCH=arm64 LLVM=1 defconfig
+          make ARCH=arm64 LLVM=1 prepare modules_prepare
+
+      - name: Build affected objects
+        run: |
+          make ARCH=arm64 LLVM=1 W=1 drivers/iommu/apple-dart.o
+          make ARCH=arm64 LLVM=1 W=1 drivers/soc/apple/dockchannel.o
+          make ARCH=arm64 LLVM=1 W=1 drivers/soc/apple/rtkit-helper.o
+          make ARCH=arm64 LLVM=1 W=1 drivers/hid/dockchannel-hid/dockchannel-hid.o
+
+      - name: Build J715 DTB
+        run: make ARCH=arm64 LLVM=1 arch/arm64/boot/dts/apple/t8132-j715.dtb
+
+      - name: Validate DART binding
+        run: make dt_binding_check DT_SCHEMA_FILES=Documentation/devicetree/bindings/iommu/apple,dart.yaml
+
+  checkpatch:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check six-patch series
+        run: |
+          git fetch origin gravity-m4
+          git format-patch --stdout origin/gravity-m4..macbook-m4-input-series-v2 | \
+            ./scripts/checkpatch.pl --no-tree --no-signoff -
