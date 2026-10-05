@@ -2,7 +2,7 @@
 
 config APPLE_DOCKCHANNEL_HID
 	tristate "HID over Apple DockChannel"
-	depends on APPLE_DOCKCHANNEL
+	depends on APPLE_DOCKCHANNEL_MAILBOX
 	depends on APPLE_RTKIT
 	depends on HID
 	depends on INPUT
