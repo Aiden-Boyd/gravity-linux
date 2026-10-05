@@ -1,0 +1,53 @@
+name: J614s T6040 Foundation QA
+
+on:
+  push:
+    branches:
+      - m4-pro-j614s-qa
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dt-build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            bc bison build-essential clang device-tree-compiler flex \
+            libelf-dev libssl-dev lld llvm make python3-pip python3-setuptools
+          python3 -m pip install --break-system-packages dtschema
+
+      - name: Configure arm64
+        run: |
+          make ARCH=arm64 LLVM=1 defconfig
+          make ARCH=arm64 LLVM=1 prepare
+
+      - name: Build J614s DTB
+        run: |
+          make ARCH=arm64 LLVM=1 W=1 \
+            apple/t6040-j614s.dtb
+
+      - name: Validate Apple machine binding
+        run: |
+          make dt_binding_check \
+            DT_SCHEMA_FILES=Documentation/devicetree/bindings/arm/apple.yaml
+
+      - name: Run DT schema checks for J614s
+        continue-on-error: true
+        run: |
+          make ARCH=arm64 LLVM=1 CHECK_DTBS=y \
+            apple/t6040-j614s.dtb
+
+      - name: Check whitespace
+        run: |
+          git fetch --depth=1 origin gravity-m4:refs/remotes/origin/gravity-m4
+          git diff --check origin/gravity-m4..HEAD
