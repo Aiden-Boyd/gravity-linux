@@ -15,9 +15,13 @@ def main():
     parser.add_argument("initramfs")
     parser.add_argument("log")
     args = parser.parse_args()
+    # Cortex-A76 supports the kernel's 16 KiB pages without max CPU extensions.
     command = [
-        "qemu-system-aarch64", "-machine", "virt", "-cpu", "cortex-a72",
+        "qemu-system-aarch64", "-machine", "virt", "-accel", "tcg", "-cpu", "cortex-a76",
         "-m", "1024", "-smp", "2", "-nographic", "-no-reboot",
+        "-nic", "none",
+        "-object", "rng-random,id=rng0,filename=/dev/urandom",
+        "-device", "virtio-rng-device,rng=rng0",
         "-kernel", args.image, "-initrd", args.initramfs,
         "-append", "console=ttyAMA0 rdinit=/init panic=-1 j614s.selftest=1",
     ]
@@ -34,7 +38,8 @@ def main():
             for key, _ in selector.select(timeout=1):
                 chunk = os.read(key.fileobj.fileno(), 65536)
                 if not chunk:
-                    raise RuntimeError("QEMU exited before the shell test passed")
+                    raise RuntimeError("QEMU exited before the shell test passed:\n" +
+                                       output[-8192:].decode(errors="replace"))
                 output.extend(chunk)
             if not sent and b"j614s> " in output:
                 process.stdin.write(b"printf '%s%s\\n' J614S_INTERACTIVE_ PASS\n")
