@@ -28,6 +28,7 @@ def main():
     output = bytearray()
     sent = False
     dumped = False
+    broke = False
     passed = False
     process = subprocess.Popen(command, stdin=subprocess.PIPE,
                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
@@ -42,9 +43,13 @@ def main():
                     raise RuntimeError("QEMU exited before the shell test passed:\n" +
                                        output[-8192:].decode(errors="replace"))
                 output.extend(chunk)
-            if not dumped and time.monotonic() > deadline - 90:
+            if not broke and time.monotonic() > deadline - 100:
+                process.stdin.write(b"\x01b")
+                process.stdin.flush()
+                broke = True
+            if not dumped and time.monotonic() > deadline - 98:
                 # QEMU stdio multiplexor: serial BREAK then SysRq task dump.
-                process.stdin.write(b"\x01bt")
+                process.stdin.write(b"t")
                 process.stdin.flush()
                 dumped = True
             if not sent and b"j614s> " in output:
