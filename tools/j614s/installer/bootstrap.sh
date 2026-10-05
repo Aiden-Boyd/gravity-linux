@@ -89,7 +89,7 @@ echo "  Power:         AC"
 echo
 
 echo "Downloading upstream Asahi installer..."
-if [ -n "$ASAHI_INSTALLER_VERSION" ]; then
+if [ -n "${ASAHI_INSTALLER_VERSION:-}" ]; then
     ASAHI_VERSION="$ASAHI_INSTALLER_VERSION"
 else
     ASAHI_VERSION=$(curl -fsSL "$ASAHI_VERSION_URL")
