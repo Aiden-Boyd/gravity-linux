@@ -5,6 +5,7 @@ on:
     branches:
       - m4-pro-j614s-dev-qa
       - m4-pro-j614s-pcie-foundation
+      - m4-pro-j614s-smc-foundation-v2
   workflow_dispatch:
 
 permissions:
