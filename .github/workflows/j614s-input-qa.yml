@@ -10,13 +10,14 @@ permissions:
   contents: read
 
 jobs:
-  build:
+  input-build:
     runs-on: ubuntu-24.04
     timeout-minutes: 45
+
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 1
+          fetch-depth: 0
 
       - name: Install dependencies
         run: |
@@ -32,13 +33,16 @@ jobs:
           scripts/config --enable CONFIG_HID
           scripts/config --enable CONFIG_INPUT
           scripts/config --enable CONFIG_APPLE_DOCKCHANNEL
+          scripts/config --enable CONFIG_APPLE_RTKIT_HELPER
           scripts/config --enable CONFIG_HID_DOCKCHANNEL
           make ARCH=arm64 LLVM=1 olddefconfig
           make ARCH=arm64 LLVM=1 prepare modules_prepare
 
-      - name: Build DockChannel HID
+      - name: Build J614s input stack
         run: |
           make ARCH=arm64 LLVM=1 W=1 \
+            drivers/soc/apple/dockchannel.o \
+            drivers/soc/apple/rtkit-helper.o \
             drivers/hid/dockchannel-hid/dockchannel-hid.o
 
       - name: Build J614s DTBs
@@ -52,8 +56,7 @@ jobs:
           make dt_binding_check \
             DT_SCHEMA_FILES=Documentation/devicetree/bindings/arm/apple.yaml
 
-      - name: DT schema checks
-        continue-on-error: true
+      - name: Run DT schema checks
         run: |
           make ARCH=arm64 LLVM=1 CHECK_DTBS=y \
             apple/t6040-j614s.dtb \
@@ -61,5 +64,5 @@ jobs:
 
       - name: Check whitespace
         run: |
-          git fetch --depth=1 origin gravity-m4:refs/remotes/origin/gravity-m4
-          git diff --check origin/gravity-m4..HEAD
+          git fetch origin m4-pro-j614s-foundation:refs/remotes/origin/m4-pro-j614s-foundation
+          git diff --check origin/m4-pro-j614s-foundation..m4-pro-j614s-input
