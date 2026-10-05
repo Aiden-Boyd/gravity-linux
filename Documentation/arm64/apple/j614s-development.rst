@@ -98,3 +98,45 @@ Sources:
 * https://github.com/GravityLinux/bootloader/blob/main/src/smp.c
 * https://github.com/GravityLinux/bootloader/blob/main/README.md
 * https://github.com/GravityLinux/installer/blob/main/README.md
+
+Read-only target report and recovery prerequisites
+-------------------------------------------------
+
+Run "python3 tools/j614s/preflight.py" in macOS on the target laptop.
+It reports only whitelisted sysctl hardware fields and sw_vers version/build.
+It does not collect serial numbers, identifiers, disk layouts or account data,
+and does not invoke diskutil, csrutil, bputil, kmutil or nvram. It prints JSON
+to stdout and returns a nonzero status if the model cannot be confirmed.
+Even a model match always reports ready_to_boot=false.
+
+Reviewed loader revision:
+GravityLinux/bootloader 950e6b7f268e71cf77889f27a760782bf898b651.
+Its dt_set_cpus implementation matches CPU nodes positionally against
+loader SMP indices, verifies MPIDR, fills release addresses and prunes
+inactive CPUs and their cpu-map references. J614s ADT CPU indices and the
+12-core/14-core bin must be reconciled with this behaviour before a test.
+Source-level T6040 recognition is not evidence of a successful board boot.
+
+The documented Asahi stage-1 flow requires an internal OS boot identity
+and recovery-mediated boot-policy enrollment. Tethered boot also requires
+an enrolled m1n1 stage 1 and a host connection. A RAM-only root filesystem
+does not eliminate those initial disk and boot-policy requirements.
+These generic documents are not a qualified M4 Pro installation recipe.
+
+Before a physical boot experiment, establish an independent backup and
+the machine-specific fallback procedure. Apple's firmware recovery guide
+requires another Mac on macOS 14 or later, internet access, and a USB-C cable
+supporting data and charging. Revive preserves data; Restore erases it.
+Do not perform either action merely to test readiness. Record availability
+of the recovery host and cable; the collector cannot verify them.
+
+The next hardware decision requires the target report, the availability of
+a recovery host, the backup state, and an explicit, concrete decision about
+the separate Linux boot identity. No stage-1 replacement, enrollment,
+partition change or installer model override is automated by this branch.
+
+References:
+
+* https://asahilinux.org/docs/alt/boot-process-guide/
+* https://asahilinux.org/docs/sw/tethered-boot/
+* https://support.apple.com/en-us/108900
