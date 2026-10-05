@@ -52,8 +52,8 @@ jobs:
       - name: Build J614s DTBs
         run: |
           make ARCH=arm64 LLVM=1 W=1 \
-            arch/arm64/boot/dts/apple/t6040-j614s.dtb \
-            arch/arm64/boot/dts/apple/t6040-j614s-kbd.dtb
+            apple/t6040-j614s.dtb \
+            apple/t6040-j614s-kbd.dtb
 
       - name: Validate Apple machine binding
         run: |
@@ -64,8 +64,8 @@ jobs:
         continue-on-error: true
         run: |
           make ARCH=arm64 LLVM=1 CHECK_DTBS=y \
-            arch/arm64/boot/dts/apple/t6040-j614s.dtb \
-            arch/arm64/boot/dts/apple/t6040-j614s-kbd.dtb
+            apple/t6040-j614s.dtb \
+            apple/t6040-j614s-kbd.dtb
 
       - name: Check whitespace
         run: |
