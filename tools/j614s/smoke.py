@@ -17,7 +17,7 @@ def main():
     args = parser.parse_args()
     # The development kernel uses 16 KiB pages; cortex-a72 only supports 4/64 KiB.
     command = [
-        "qemu-system-aarch64", "-machine", "virt", "-accel", "tcg", "-cpu", "max,lpa2=off",
+        "qemu-system-aarch64", "-machine", "virt", "-accel", "tcg", "-cpu", "cortex-a76",
         "-m", "1024", "-smp", "2", "-nographic", "-no-reboot",
         "-nic", "none",
         "-object", "rng-random,id=rng0,filename=/dev/urandom",
