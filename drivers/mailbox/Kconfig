@@ -23,7 +23,7 @@ config ARM_MHU_V2
 	  Say Y here if you want to build the ARM MHUv2 controller driver,
 	  which provides unidirectional mailboxes between processing elements.
 
-config APPLE_DOCKCHANNEL
+config APPLE_DOCKCHANNEL_MAILBOX
 	tristate "Apple DockChannel FIFO mailbox"
 	depends on ARCH_APPLE || COMPILE_TEST
 	depends on HAS_IOMEM
