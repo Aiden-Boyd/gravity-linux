@@ -1,0 +1,175 @@
+#!/bin/sh
+# SPDX-License-Identifier: MIT
+#
+# Expert-only J614s/T6040 bootstrap for a tethered m1n1 development install.
+#
+# This wrapper intentionally reuses the upstream Asahi installer for APFS,
+# stub macOS, Recovery/Preboot, authentication, boot policy, blessing, and
+# stage-2 enrollment. It only adds J614s admission plus macOS 26 AEA recovery
+# handling and exposes a tethered m1n1-only install profile.
+
+set -eu
+
+fail()
+{
+    echo
+    echo "ERROR: $*" >&2
+    exit 1
+}
+
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+
+ASAHI_VERSION_URL="https://cdn.asahilinux.org/installer/latest"
+ASAHI_INSTALLER_BASE="https://cdn.asahilinux.org/installer"
+
+IPSW_TOOL_VERSION="3.1.730"
+IPSW_TOOL_ARCHIVE="ipsw_3.1.730_macOS_arm64.tar.gz"
+IPSW_TOOL_URL="https://github.com/blacktop/ipsw/releases/download/v3.1.730/$IPSW_TOOL_ARCHIVE"
+IPSW_TOOL_SHA256="3f50591e4674daf27d2c82a3e9cd4e37ccaa6297197cb5adc6999571859cd321"
+
+TMP="/tmp/gravity-j614s-installer"
+
+echo
+echo "Gravity Linux J614s tethered-development installer"
+echo "=================================================="
+echo
+echo "This is EXPERT-ONLY bring-up tooling for Mac16,8 / J614s / T6040."
+echo "It creates an Asahi-style stub boot environment and enrolls m1n1."
+echo "It does NOT install a Linux root filesystem and does NOT enable NVMe,"
+echo "Wi-Fi, Bluetooth, SD, USB, or other experimental J614s hardware."
+echo
+
+[ "$(uname -s)" = "Darwin" ] || fail "this bootstrap must run from macOS"
+[ "$(uname -m)" = "arm64" ] || fail "this bootstrap requires Apple silicon"
+
+MODEL=$(sysctl -n hw.model 2>/dev/null || true)
+[ "$MODEL" = "Mac16,8" ] || fail "expected Mac16,8, got '$MODEL'"
+
+OS_VERSION=$(sw_vers -productVersion)
+OS_MAJOR=$(printf '%s\n' "$OS_VERSION" | awk -F. '{print $1}')
+OS_MINOR=$(printf '%s\n' "$OS_VERSION" | awk -F. '{print $2}')
+[ "$OS_MAJOR" = "26" ] || fail "this v1 installer is reviewed only for macOS 26.x (found $OS_VERSION)"
+[ "$OS_MINOR" -ge 5 ] || fail "macOS 26.5 or newer is required (found $OS_VERSION)"
+
+if ! pmset -g batt | head -n 1 | grep -q "AC Power"; then
+    fail "connect the MacBook to AC power before modifying APFS/boot state"
+fi
+
+[ -d /System/Volumes/Data ] || fail "run this first stage from the normal macOS installation"
+
+PREEXISTING=$(
+    diskutil list 2>/dev/null |
+    awk '$0 ~ /APFS Volume m1n1([[:space:]]|$)/ {print $NF}' |
+    tr '\n' ' '
+)
+if [ -n "$PREEXISTING" ]; then
+    echo
+    echo "Found manually-created APFS volume(s) named exactly 'm1n1':"
+    for dev in $PREEXISTING; do
+        echo "  $dev"
+    done
+    echo
+    echo "This installer deliberately refuses to guess whether they are disposable."
+    echo "Remove only the empty test volumes you created manually, then rerun."
+    echo "Example (ONLY after verifying the identifier):"
+    echo "  diskutil apfs deleteVolume <diskXsY>"
+    exit 1
+fi
+
+AVAIL_KB=$(df -k /System/Volumes/Data | awk 'NR==2 {print $4}')
+MIN_KB=$((12 * 1024 * 1024))
+[ "$AVAIL_KB" -ge "$MIN_KB" ] ||
+    fail "keep at least 12 GiB free on the macOS APFS container before continuing"
+
+echo "Preflight:"
+echo "  Model:         $MODEL"
+echo "  macOS:         $OS_VERSION ($(sw_vers -buildVersion))"
+echo "  Free space:    $((AVAIL_KB / 1024 / 1024)) GiB"
+echo "  Power:         AC"
+echo
+
+echo "Downloading upstream Asahi installer..."
+if [ -n "$ASAHI_INSTALLER_VERSION" ]; then
+    ASAHI_VERSION="$ASAHI_INSTALLER_VERSION"
+else
+    ASAHI_VERSION=$(curl -fsSL "$ASAHI_VERSION_URL")
+fi
+case "$ASAHI_VERSION" in
+    ""|*[!A-Za-z0-9._-]*) fail "unexpected Asahi installer version string: '$ASAHI_VERSION'" ;;
+esac
+
+PKG="installer-$ASAHI_VERSION.tar.gz"
+if [ -e "$TMP" ]; then
+    mv "$TMP" "$TMP-$(date +%Y%m%d-%H%M%S)"
+fi
+mkdir -p "$TMP"
+cd "$TMP"
+
+curl -fL --progress-bar -o "$PKG" "$ASAHI_INSTALLER_BASE/$PKG"
+tar xzf "$PKG"
+
+[ -x ./install.sh ] || fail "unexpected Asahi installer package layout: install.sh missing"
+[ -f ./main.py ] || fail "unexpected Asahi installer package layout: main.py missing"
+[ -f ./stub.py ] || fail "unexpected Asahi installer package layout: stub.py missing"
+[ -f ./boot/m1n1.bin ] || fail "unexpected Asahi installer package layout: m1n1 missing"
+
+echo
+echo "Verifying embedded m1n1 has T6040 support..."
+if ! /usr/bin/strings ./boot/m1n1.bin | grep -qi "t6040"; then
+    fail "the downloaded Asahi installer m1n1 does not advertise T6040 support"
+fi
+
+PY="./Frameworks/Python.framework/Versions/3.13/bin/python3.13"
+[ -x "$PY" ] || fail "bundled Asahi Python runtime not found"
+
+M1N1_VER=$(
+    "$PY" -c 'import m1n1; print(m1n1.get_version("boot/m1n1.bin") or "unknown")'
+)
+echo "  m1n1: $M1N1_VER"
+
+echo
+echo "Downloading pinned AEA helper (blacktop/ipsw v$IPSW_TOOL_VERSION)..."
+curl -fL --progress-bar -o "$IPSW_TOOL_ARCHIVE" "$IPSW_TOOL_URL"
+
+ACTUAL_SHA=$(/usr/bin/shasum -a 256 "$IPSW_TOOL_ARCHIVE" | awk '{print $1}')
+[ "$ACTUAL_SHA" = "$IPSW_TOOL_SHA256" ] ||
+    fail "AEA helper SHA-256 mismatch (got $ACTUAL_SHA)"
+
+mkdir -p ipsw-tool
+tar xzf "$IPSW_TOOL_ARCHIVE" -C ipsw-tool
+IPSW_AEA_TOOL=$(find "$TMP/ipsw-tool" -type f -name ipsw | head -n 1)
+[ -n "$IPSW_AEA_TOOL" ] || fail "could not find ipsw executable in pinned archive"
+chmod +x "$IPSW_AEA_TOOL"
+
+echo
+echo "Applying J614s/T6040 installer patch..."
+"$PY" "$SCRIPT_DIR/patch_installer.py" "$TMP"
+"$PY" -m py_compile "$TMP/main.py" "$TMP/stub.py"
+
+cp "$SCRIPT_DIR/installer_data.json" "$TMP/installer_data.json"
+
+echo
+echo "Patched installer ready:"
+echo "  Asahi installer: $ASAHI_VERSION"
+echo "  m1n1:            $M1N1_VER"
+echo "  AEA helper:      ipsw v$IPSW_TOOL_VERSION (SHA-256 verified)"
+echo "  Target:          Mac16,8 / j614sap / T6040"
+echo "  Profile:         tethered m1n1 proxy only"
+echo
+echo "The upstream Asahi installer will still ask before resizing or creating"
+echo "partitions, and its Recovery step will require your machine-owner approval."
+echo
+
+export EXPERT=1
+export IPSW_AEA_TOOL
+export REPO_BASE="https://cdn.asahilinux.org"
+export DISTRO="Gravity Linux J614s Dev"
+export DISTRO_DOCS="https://github.com/Aiden-Boyd/gravity-linux"
+unset REPORT REPORT_TAG 2>/dev/null || true
+
+if [ "$(id -u)" -ne 0 ]; then
+    echo "The installer now needs administrator privileges."
+    exec caffeinate -dis sudo -E ./install.sh
+else
+    exec caffeinate -dis ./install.sh
+fi
