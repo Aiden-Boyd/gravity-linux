@@ -20,8 +20,10 @@ def main():
         "qemu-system-aarch64", "-machine", "virt", "-accel", "tcg", "-cpu", "max",
         "-m", "1024", "-smp", "2", "-nographic", "-no-reboot",
         "-nic", "none",
+        "-object", "rng-random,id=rng0,filename=/dev/urandom",
+        "-device", "virtio-rng-device,rng=rng0",
         "-kernel", args.image, "-initrd", args.initramfs,
-        "-append", "console=ttyAMA0 rdinit=/init panic=-1 j614s.selftest=1",
+        "-append", "console=ttyAMA0 initcall_debug rdinit=/init panic=-1 j614s.selftest=1",
     ]
     output = bytearray()
     sent = False
