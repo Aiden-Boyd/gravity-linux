@@ -223,6 +223,7 @@ def extract_nodes(archive, profile):
         raise ValueError("Unexpected IORegistry archive root type")
 
     found = []
+    seen_paths = set()
 
     def walk(node, parent_path=""):
         if not isinstance(node, dict):
@@ -231,7 +232,8 @@ def extract_nodes(archive, profile):
         name = node_name(node)
         path = f"{parent_path}/{name}" if parent_path else f"/{name}"
 
-        if profile_matches(profile, node):
+        if profile_matches(profile, node) and path not in seen_paths:
+            seen_paths.add(path)
             properties = {}
             for key, value in node.items():
                 key = str(key)

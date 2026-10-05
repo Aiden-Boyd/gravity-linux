@@ -107,6 +107,20 @@ class AdtEvidenceTests(unittest.TestCase):
         self.assertNotIn("dart-jpeg0", names)
         self.assertNotIn("unrelated", names)
 
+    def test_duplicate_paths_are_collapsed(self):
+        archive = [{
+            "IORegistryEntryName": "Root",
+            "IORegistryEntryChildren": [{
+                "IORegistryEntryName": "apcie0",
+                "reg": (1).to_bytes(4, "big"),
+            }, {
+                "IORegistryEntryName": "apcie0",
+                "reg": (1).to_bytes(4, "big"),
+            }],
+        }]
+        nodes = REPORT.extract_nodes(archive, self.profile())
+        self.assertEqual([node["path"] for node in nodes], ["/Root/apcie0"])
+
     def test_decodes_cells_and_compatible_strings(self):
         nodes = REPORT.extract_nodes(self.sample_archive(), self.profile())
         by_name = {node["name"]: node for node in nodes}
