@@ -438,7 +438,7 @@ static int apple_spmi_probe(struct platform_device *pdev)
 
 	ctrl = devm_spmi_controller_alloc(&pdev->dev, sizeof(*spmi));
 	if (IS_ERR(ctrl))
-		return -ENOMEM;
+		return PTR_ERR(ctrl);
 
 	spmi = spmi_controller_get_drvdata(ctrl);
 	mutex_init(&spmi->fifo_lock);
