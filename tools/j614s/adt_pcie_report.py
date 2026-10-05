@@ -244,7 +244,7 @@ def extract_nodes(archive):
 
 
 def read_iodevicetree(run=run_bytes):
-    raw = run(["/usr/sbin/ioreg", "-p", "IODeviceTree", "-a"])
+    raw = run(["/usr/sbin/ioreg", "-p", "IODeviceTree", "-l", "-a"])
     if not raw:
         return None
     try:
@@ -269,7 +269,7 @@ def collect(archive=None, run_binary=run_bytes, run_string=run_text, system=None
     system = platform.system() if system is None else system
     if archive is None and system != "Darwin":
         return {
-            "report_version": 1,
+            "report_version": 2,
             "status": "unsupported_host",
             "ready_to_boot": False,
             "reason": "Run this collector on the target Mac in macOS.",
@@ -287,7 +287,7 @@ def collect(archive=None, run_binary=run_bytes, run_string=run_text, system=None
         archive = read_iodevicetree(run_binary)
         if archive is None:
             return {
-                "report_version": 1,
+                "report_version": 2,
                 "status": "ioreg_failed",
                 "host": host,
                 "ready_to_boot": False,
@@ -295,27 +295,40 @@ def collect(archive=None, run_binary=run_bytes, run_string=run_text, system=None
             }
 
     nodes = extract_nodes(archive)
+    property_nodes = sum(bool(node["properties"]) for node in nodes)
+    reason = None
+
     if not nodes:
         status = "no_matching_nodes"
+    elif property_nodes == 0:
+        status = "evidence_incomplete"
+        reason = (
+            "Matching IODeviceTree nodes were found, but none included exported "
+            "properties. Re-run with a collector that invokes ioreg with -l."
+        )
     elif host["matches_j614s"] is False:
         status = "model_unconfirmed"
     else:
         status = "evidence_collected"
 
-    return {
-        "report_version": 1,
+    report = {
+        "report_version": 2,
         "status": status,
         "target": {"board": "J614s", "soc": "T6040", "model": "Mac16,8"},
         "host": host,
-        "source": "ioreg -p IODeviceTree -a",
+        "source": "ioreg -p IODeviceTree -l -a",
         "read_only": True,
         "nodes": nodes,
+        "property_nodes": property_nodes,
         "ready_to_boot": False,
         "notice": (
             "This report is hardware evidence only. It does not approve a boot, "
             "modify disks, change boot policy, load firmware, or write NVRAM."
         ),
     }
+    if reason is not None:
+        report["reason"] = reason
+    return report
 
 
 def main():
