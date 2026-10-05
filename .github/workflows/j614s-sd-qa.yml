@@ -1,0 +1,67 @@
+name: J614s SD QA
+
+on:
+  push:
+    branches:
+      - m4-pro-j614s-sd-qa
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            bc bison build-essential clang device-tree-compiler flex \
+            libelf-dev libssl-dev lld llvm make python3-pip python3-setuptools
+          python3 -m pip install --break-system-packages dtschema
+
+      - name: Configure ARM64
+        run: |
+          make ARCH=arm64 LLVM=1 defconfig
+          scripts/config --disable CONFIG_ARM64_4K_PAGES
+          scripts/config --enable CONFIG_ARM64_16K_PAGES
+          scripts/config --enable CONFIG_PCIE_APPLE
+          scripts/config --enable CONFIG_PINCTRL_APPLE_GPIO
+          scripts/config --enable CONFIG_MFD_MACSMC
+          scripts/config --enable CONFIG_GPIO_MACSMC
+          scripts/config --enable CONFIG_MMC
+          scripts/config --enable CONFIG_MMC_SDHCI
+          scripts/config --enable CONFIG_MMC_SDHCI_PCI
+          make ARCH=arm64 LLVM=1 olddefconfig
+          grep -q '^CONFIG_ARM64_16K_PAGES=y' .config
+          grep -q '^CONFIG_PCIE_APPLE=y' .config
+          grep -q '^CONFIG_PINCTRL_APPLE_GPIO=y' .config
+          make ARCH=arm64 LLVM=1 prepare modules_prepare
+
+      - name: Build PCIe and SD path
+        run: |
+          make ARCH=arm64 LLVM=1 W=1 \
+            drivers/pci/controller/pcie-apple.o \
+            drivers/pinctrl/pinctrl-apple-gpio.o \
+            drivers/gpio/gpio-macsmc.o \
+            drivers/mmc/host/sdhci-pci.o
+
+      - name: Build J614s SD DTB
+        run: |
+          make ARCH=arm64 LLVM=1 W=1 apple/t6040-j614s-sd.dtb
+
+      - name: DT schema check
+        continue-on-error: true
+        run: |
+          make ARCH=arm64 LLVM=1 CHECK_DTBS=y apple/t6040-j614s-sd.dtb
+
+      - name: Check whitespace
+        run: |
+          git fetch origin gravity-m4:refs/remotes/origin/gravity-m4
+          git diff --check origin/gravity-m4..m4-pro-j614s-sd
