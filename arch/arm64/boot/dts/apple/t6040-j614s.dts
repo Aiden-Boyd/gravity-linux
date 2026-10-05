@@ -51,3 +51,11 @@
 &serial0 {
 	status = "okay";
 };
+
+&smc_mbox {
+	status = "okay";
+};
+
+&smc {
+	status = "okay";
+};
