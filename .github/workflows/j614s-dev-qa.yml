@@ -35,9 +35,20 @@ jobs:
           scripts/config --enable CONFIG_APPLE_DOCKCHANNEL
           scripts/config --enable CONFIG_APPLE_RTKIT_HELPER
           scripts/config --enable CONFIG_HID_DOCKCHANNEL
-          scripts/config --enable CONFIG_MFD_APPLE_SMC
-          scripts/config --enable CONFIG_SENSORS_APPLESMC
+          scripts/config --enable CONFIG_MAILBOX
+          scripts/config --enable CONFIG_APPLE_RTKIT
+          scripts/config --enable CONFIG_APPLE_DOCKCHANNEL_MAILBOX
+          scripts/config --enable CONFIG_APPLE_DOCKCHANNEL_HID
+          scripts/config --enable CONFIG_MFD_MACSMC
+          scripts/config --enable CONFIG_HWMON
+          scripts/config --enable CONFIG_SENSORS_MACSMC_HWMON
           make ARCH=arm64 LLVM=1 olddefconfig
+          for symbol in APPLE_DOCKCHANNEL_MAILBOX APPLE_DOCKCHANNEL_HID MFD_MACSMC SENSORS_MACSMC_HWMON; do
+            grep -qx "CONFIG_${symbol}=y" .config || {
+              echo "Required driver CONFIG_${symbol} was disabled by Kconfig"
+              exit 1
+            }
+          done
           make ARCH=arm64 LLVM=1 prepare modules_prepare
 
       - name: Build J614s platform objects
@@ -47,14 +58,15 @@ jobs:
             drivers/soc/apple/dockchannel.o \
             drivers/soc/apple/rtkit-helper.o \
             drivers/hid/dockchannel-hid/dockchannel-hid.o \
+            drivers/mailbox/apple-dockchannel.o \
+            drivers/hid/apple-dockchannel-hid/apple_dockchannel_hid.o \
             drivers/mfd/macsmc.o \
             drivers/hwmon/macsmc-hwmon.o
 
       - name: Build J614s DTBs
         run: |
           make ARCH=arm64 LLVM=1 W=1 \
-            apple/t6040-j614s.dtb \
-            apple/t6040-j614s-kbd.dtb
+            apple/t6040-j614s.dtb
 
       - name: Validate SMC binding
         run: |
@@ -64,8 +76,7 @@ jobs:
       - name: Run DT schema checks
         run: |
           make ARCH=arm64 LLVM=1 CHECK_DTBS=y \
-            apple/t6040-j614s.dtb \
-            apple/t6040-j614s-kbd.dtb
+            apple/t6040-j614s.dtb
 
       - name: Check whitespace
         run: |
