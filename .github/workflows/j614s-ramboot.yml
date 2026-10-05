@@ -77,7 +77,7 @@ jobs:
           ) | gzip -n -9 > initramfs-j614s-ramboot.cpio.gz
 
           file ramroot/init
-          test "$(readelf -h ramroot/init | awk '/Machine:/ {print $2, $3}')" = "AArch64"
+          readelf -h ramroot/init | grep -q 'Machine:.*AArch64'
 
       - name: Stage boot bundle
         run: |
