@@ -1,0 +1,73 @@
+// SPDX-License-Identifier: GPL-2.0+ OR MIT
+/*
+ * Apple MacBook Pro (14-inch, M4 Pro, 2024) J614s Wi-Fi/BT bring-up
+ *
+ * Enable only the measured PCIe path required by the internal Broadcom
+ * BCM4388 Wi-Fi/Bluetooth module. SD, NVMe and other PCIe ports remain
+ * outside this diagnostic DTB.
+ */
+
+/dts-v1/;
+
+#include "t6040-j614s.dts"
+
+/ {
+	model = "Apple MacBook Pro (14-inch, M4 Pro, 2024) J614s [Wi-Fi/BT bring-up]";
+
+	aliases {
+		wifi0 = &wifi0;
+		bluetooth0 = &bluetooth0;
+	};
+};
+
+&smc_mbox {
+	status = "okay";
+};
+
+&smc {
+	status = "okay";
+};
+
+&pinctrl_ap {
+	status = "okay";
+};
+
+&pcie0_dart_0 {
+	status = "okay";
+};
+
+&pcie0 {
+	/* Only root port 0 is active in this diagnostic variant. */
+	iommu-map = <0x100 &pcie0_dart_0 1 1>;
+	status = "okay";
+};
+
+&port00 {
+	/*
+	 * J614s ADT /amfm function-reg_on maps WLAN WL_REG_ON to SMC
+	 * key gP13. gpio-macsmc exposes that as line 0x13.
+	 */
+	pwren-gpios = <&smc_gpio 0x13 GPIO_ACTIVE_HIGH>;
+	max-link-speed = <2>;
+	bus-range = <1 1>;
+	status = "okay";
+
+	wifi0: wifi@0,0 {
+		compatible = "pci14e4,4434";
+		reg = <0x10000 0x0 0x0 0x0 0x0>;
+		/*
+		 * m1n1 may replace this placeholder; brcmfmac can also obtain
+		 * the module address from OTP when no valid DT address is set.
+		 */
+		local-mac-address = [00 00 00 00 00 00];
+		apple,antenna-sku = "X3";
+		brcm,board-type = "apple,mriya";
+	};
+
+	bluetooth0: bluetooth@0,1 {
+		compatible = "pci14e4,5f72";
+		reg = <0x10100 0x0 0x0 0x0 0x0>;
+		local-bd-address = [00 00 00 00 00 00];
+		brcm,board-type = "apple,mriya";
+	};
+};
