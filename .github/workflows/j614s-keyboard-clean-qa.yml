@@ -1,0 +1,56 @@
+name: J614s Clean Keyboard QA
+
+on:
+  push:
+    branches:
+      - m4-pro-j614s-keyboard-clean-qa
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            bc bison build-essential clang device-tree-compiler flex \
+            libelf-dev libssl-dev lld llvm make
+
+      - name: Configure ARM64
+        run: |
+          make ARCH=arm64 LLVM=1 defconfig
+          scripts/config --enable CONFIG_HID
+          scripts/config --enable CONFIG_INPUT
+          scripts/config --enable CONFIG_MAILBOX
+          scripts/config --enable CONFIG_APPLE_DOCKCHANNEL_MAILBOX
+          scripts/config --enable CONFIG_APPLE_MAILBOX
+          scripts/config --enable CONFIG_APPLE_RTKIT
+          scripts/config --enable CONFIG_APPLE_DOCKCHANNEL_HID
+          make ARCH=arm64 LLVM=1 olddefconfig
+          grep -q '^CONFIG_APPLE_DOCKCHANNEL_MAILBOX=y' .config
+          grep -q '^CONFIG_APPLE_DOCKCHANNEL_HID=y' .config
+          make ARCH=arm64 LLVM=1 prepare modules_prepare
+
+      - name: Build mailbox DockChannel HID
+        run: |
+          make ARCH=arm64 LLVM=1 W=1 \
+            drivers/mailbox/apple-dockchannel.o \
+            drivers/hid/apple-dockchannel-hid/apple_dockchannel_hid.o
+
+      - name: Build J614s keyboard DTB
+        run: |
+          make ARCH=arm64 LLVM=1 W=1 apple/t6040-j614s-kbd-clean.dtb
+
+      - name: Check whitespace
+        run: |
+          git fetch --depth=1 origin gravity-m4:refs/remotes/origin/gravity-m4
+          git diff --check origin/gravity-m4..HEAD
