@@ -11,7 +11,7 @@ obj-$(CONFIG_ARM_MHU_V2)	+= arm_mhuv2.o
 
 obj-$(CONFIG_ARM_MHU_V3)	+= arm_mhuv3.o
 
-obj-$(CONFIG_APPLE_DOCKCHANNEL)	+= apple-dockchannel.o
+obj-$(CONFIG_APPLE_DOCKCHANNEL_MAILBOX)	+= apple-dockchannel.o
 
 obj-$(CONFIG_AST2700_MBOX)	+= ast2700-mailbox.o
 
