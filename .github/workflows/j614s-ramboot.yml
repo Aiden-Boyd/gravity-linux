@@ -33,7 +33,10 @@ jobs:
           rustup target add aarch64-unknown-none-softfloat
 
       - name: Build exact chainloading stage1
+        env:
+          M1N1_VERSION_TAG: v1.9.9
         run: |
+          test "$(git -C m1n1 rev-parse HEAD)" = "809541515659bf4e504807fd72bc0a539be5eee7"
           make -C m1n1 RELEASE=1 CHAINLOADING=1 -j"$(nproc)"
           grep -qx '#define RELEASE' m1n1/build/build_cfg.h
           grep -qx '#define CHAINLOADING' m1n1/build/build_cfg.h
