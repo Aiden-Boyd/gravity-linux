@@ -22,6 +22,7 @@ Then load in dependency order, checking dmesg after EVERY command:
 
 Internal keyboard/trackpad:
   modprobe apple-dockchannel
+  modprobe apple-rtkit-helper
   modprobe dockchannel-hid
 
 Internal PCIe fabric (ports 0/1 only):
