@@ -33,14 +33,7 @@ def plist_cmd(*args: str) -> dict:
     return plistlib.loads(proc.stdout)
 
 
-def main() -> int:
-    apfs = plist_cmd("diskutil", "apfs", "list", "-plist")
-    data_info = plist_cmd("diskutil", "info", "-plist", "/System/Volumes/Data")
-    data_dev = data_info.get("DeviceIdentifier")
-    if not data_dev:
-        print("ERROR: cannot identify the booted macOS Data volume", file=sys.stderr)
-        return 1
-
+def find_candidate(apfs: dict, data_dev: str):
     containers = apfs.get("Containers", [])
     boot_container = None
     for container in containers:
@@ -50,8 +43,7 @@ def main() -> int:
                 break
 
     if not boot_container:
-        print("ERROR: cannot identify the booted macOS APFS container", file=sys.stderr)
-        return 1
+        raise RuntimeError("cannot identify the booted macOS APFS container")
 
     candidates = []
     for container in containers:
@@ -65,7 +57,6 @@ def main() -> int:
             continue
 
         capacity = int(container.get("CapacityCeiling") or 0)
-        # Asahi's stub partition is 2.5 GB. Keep a deliberately narrow guard.
         if not (2_400_000_000 <= capacity <= 2_600_000_000):
             continue
 
@@ -92,15 +83,30 @@ def main() -> int:
         candidates.append((cref, store, capacity, volumes))
 
     if len(candidates) != 1:
-        print(
-            "ERROR: expected exactly one guarded partial J614s stub container, "
-            f"found {len(candidates)}",
-            file=sys.stderr,
+        raise RuntimeError(
+            "expected exactly one guarded partial J614s stub container, "
+            f"found {len(candidates)}"
         )
+
+    return boot_container, candidates[0]
+
+
+def main() -> int:
+    apfs = plist_cmd("diskutil", "apfs", "list", "-plist")
+    data_info = plist_cmd("diskutil", "info", "-plist", "/System/Volumes/Data")
+    data_dev = data_info.get("DeviceIdentifier")
+    if not data_dev:
+        print("ERROR: cannot identify the booted macOS Data volume", file=sys.stderr)
+        return 1
+
+    try:
+        boot_container, candidate = find_candidate(apfs, data_dev)
+    except RuntimeError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
         print("No disk changes were made.", file=sys.stderr)
         return 2
 
-    cref, store, capacity, volumes = candidates[0]
+    cref, store, capacity, volumes = candidate
 
     print("Guarded partial-stub cleanup")
     print("============================")
