@@ -24,8 +24,9 @@ case "${1:-}" in
     "") ;;
     --probe) MODE=probe ;;
     --local-probe) MODE=local-probe ;;
+    --cleanup-partial) MODE=cleanup-partial ;;
     *)
-        echo "usage: $0 [--probe|--local-probe]" >&2
+        echo "usage: $0 [--probe|--local-probe|--cleanup-partial]" >&2
         exit 2
         ;;
 esac
@@ -66,7 +67,7 @@ OS_MINOR=$(printf '%s\n' "$OS_VERSION" | awk -F. '{print $2}')
 
 [ -d /System/Volumes/Data ] || fail "run this from the normal macOS installation"
 
-if [ "$MODE" = "install" ]; then
+if [ "$MODE" = "install" ] || [ "$MODE" = "cleanup-partial" ]; then
     if ! pmset -g batt | head -n 1 | grep -q "AC Power"; then
         fail "connect the MacBook to AC power before modifying APFS/boot state"
     fi
@@ -90,8 +91,17 @@ if [ "$MODE" = "install" ]; then
         exit 1
     fi
 
-    if diskutil list 2>/dev/null | grep -Fq "Gravity Linux J614s Dev"; then
-        fail "an existing or partial 'Gravity Linux J614s Dev' stub is present; inspect and clean it before retrying"
+    if [ "$MODE" = "install" ] && diskutil list 2>/dev/null | grep -Fq "Gravity Linux J614s Dev"; then
+        fail "an existing or partial 'Gravity Linux J614s Dev' stub is present; use --cleanup-partial after inspecting it"
+    fi
+
+    if [ "$MODE" = "cleanup-partial" ]; then
+        echo "Preflight:"
+        echo "  Mode:          guarded partial-stub cleanup"
+        echo "  Model:         $MODEL"
+        echo "  macOS:         $OS_VERSION ($(sw_vers -buildVersion))"
+        echo "  Power:         AC"
+        echo
     fi
 
     AVAIL_KB=$(df -k /System/Volumes/Data | awk 'NR==2 {print $4}')
@@ -99,12 +109,14 @@ if [ "$MODE" = "install" ]; then
     [ "$AVAIL_KB" -ge "$MIN_KB" ] ||
         fail "keep at least 12 GiB free on the macOS APFS container before continuing"
 
-    echo "Preflight:"
-    echo "  Mode:          install"
-    echo "  Model:         $MODEL"
-    echo "  macOS:         $OS_VERSION ($(sw_vers -buildVersion))"
-    echo "  Free space:    $((AVAIL_KB / 1024 / 1024)) GiB"
-    echo "  Power:         AC"
+    if [ "$MODE" = "install" ]; then
+        echo "Preflight:"
+        echo "  Mode:          install"
+        echo "  Model:         $MODEL"
+        echo "  macOS:         $OS_VERSION ($(sw_vers -buildVersion))"
+        echo "  Free space:    $((AVAIL_KB / 1024 / 1024)) GiB"
+        echo "  Power:         AC"
+    fi
 else
     echo "Preflight:"
     if [ "$MODE" = "local-probe" ]; then
@@ -165,6 +177,12 @@ M1N1_VER=$(
     "$PY" -c 'import m1n1; print(m1n1.get_version("boot/m1n1.bin") or "unknown")'
 )
 echo "  m1n1: $M1N1_VER"
+
+if [ "$MODE" = "cleanup-partial" ]; then
+    echo
+    "$PY" "$SCRIPT_DIR/cleanup_partial.py"
+    exit $?
+fi
 
 echo
 echo "Checking host firmware / SystemRecovery alignment (read-only)..."
