@@ -73,6 +73,7 @@ BRCMF_FW_CLM_DEF(4378B3, "brcmfmac4378b3-pcie");
 BRCMF_FW_CLM_DEF(4387C2, "brcmfmac4387c2-pcie");
 BRCMF_FW_CLM_DEF(4388B0, "brcmfmac4388b0-pcie");
 BRCMF_FW_CLM_DEF(4388C0, "brcmfmac4388c0-pcie");
+BRCMF_FW_CLM_DEF(4388C2, "brcmfmac4388c2-pcie");
 BRCMF_FW_CLM_DEF(54591, "brcmfmac54591-pcie");
 
 /* firmware config files */
@@ -115,6 +116,8 @@ static const struct brcmf_firmware_mapping brcmf_pcie_fwnames[] = {
 	BRCMF_FW_ENTRY(BRCM_CC_4378_CHIP_ID, 0xFFFFFFE0, 4378B3), /* revision ID 5 */
 	BRCMF_FW_ENTRY(BRCM_CC_4387_CHIP_ID, 0xFFFFFFFF, 4387C2), /* revision ID 7 */
 	BRCMF_FW_ENTRY(BRCM_CC_4388_CHIP_ID, 0x0000000F, 4388B0),
+	/* Exact rev 6/C2 match must precede the rev >= 4 C0 fallback. */
+	BRCMF_FW_ENTRY(BRCM_CC_4388_CHIP_ID, 0x00000040, 4388C2),
 	BRCMF_FW_ENTRY(BRCM_CC_4388_CHIP_ID, 0xFFFFFFF0, 4388C0), /* revision ID 4 */
 };
 
