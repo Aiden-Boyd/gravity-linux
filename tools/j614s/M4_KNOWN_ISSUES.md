@@ -106,3 +106,5 @@ The Linux PMGR driver also preserves firmware-active T6041 raw-boot domains
 and suppresses AUTO_ENABLE on `dispext0_cpu` and `dispext1_cpu`.
 The installer pin is intentionally unchanged until CI produces and reproduces
 the new exact stage-1 binary.
+
+<!-- Patched stage-1 verification trigger: 2026-10-06 -->
