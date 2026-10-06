@@ -54,8 +54,15 @@ discarding the most useful failure evidence.
 
 ## Host-side loader
 
-Use a second Linux/macOS host connected to the target by USB-C and an m1n1
-checkout compatible with the stage-1 m1n1 installed on the target.
+Use a second Linux/macOS host connected to the target by USB-C and the exact
+reviewed m1n1 v1.6.1 checkout used by the enrolled stage-1 binary:
+
+```sh
+git clone --depth 1 --branch v1.6.1 https://github.com/AsahiLinux/m1n1.git
+```
+
+The host loader verifies the checkout is commit
+`06a4601a351ebfd1abb6abba9a44c34e40d94776` before contacting the target.
 
 First validate the downloaded SAFE artifact without contacting the target:
 

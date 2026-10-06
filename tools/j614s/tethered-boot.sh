@@ -4,6 +4,9 @@
 
 set -eu
 
+EXPECTED_M1N1_VERSION="v1.6.1"
+EXPECTED_M1N1_COMMIT="06a4601a351ebfd1abb6abba9a44c34e40d94776"
+
 usage()
 {
     cat >&2 <<'EOF'
@@ -39,6 +42,16 @@ done
 
 [ -f "$M1N1/proxyclient/tools/linux.py" ] ||
     fail "m1n1 checkout is missing proxyclient/tools/linux.py"
+
+command -v git >/dev/null 2>&1 || fail "git is required to verify the m1n1 checkout"
+M1N1_HEAD=$(git -C "$M1N1" rev-parse HEAD 2>/dev/null) ||
+    fail "m1n1 path must be a git checkout of $EXPECTED_M1N1_VERSION"
+[ "$M1N1_HEAD" = "$EXPECTED_M1N1_COMMIT" ] ||
+    fail "m1n1 checkout mismatch: expected $EXPECTED_M1N1_VERSION ($EXPECTED_M1N1_COMMIT), got $M1N1_HEAD"
+git -C "$M1N1" diff --quiet -- proxyclient m1n1 ||
+    fail "m1n1 checkout has modified proxyclient/m1n1 files; use a clean $EXPECTED_M1N1_VERSION checkout"
+git -C "$M1N1" diff --cached --quiet -- proxyclient m1n1 ||
+    fail "m1n1 checkout has staged proxyclient/m1n1 changes; use a clean $EXPECTED_M1N1_VERSION checkout"
 
 if command -v sha256sum >/dev/null 2>&1; then
     (cd "$BUNDLE" && sha256sum -c SHA256SUMS)
@@ -99,7 +112,7 @@ echo
 echo "J614s tethered RAM-boot preflight passed"
 echo "  profile:   $PROFILE"
 echo "  bundle:    $BUNDLE"
-echo "  m1n1:      $M1N1"
+echo "  m1n1:      $M1N1 ($EXPECTED_M1N1_VERSION / ${M1N1_HEAD%????????????????????????????????})"
 echo "  bootargs:  $BOOTARGS"
 if [ -n "${M1N1DEVICE:-}" ]; then
     echo "  device:    $M1N1DEVICE"

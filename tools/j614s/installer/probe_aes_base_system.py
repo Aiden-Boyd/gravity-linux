@@ -25,7 +25,7 @@ CHUNK = 16 * 1024 * 1024
 
 
 def human(n: int) -> str:
-    units = ["B", "MiB", "GiB", "TiB"]
+    units = ["B", "KiB", "MiB", "GiB", "TiB"]
     value = float(n)
     for unit in units:
         if value < 1024 or unit == units[-1]:
