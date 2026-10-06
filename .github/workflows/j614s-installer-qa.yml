@@ -27,51 +27,96 @@ jobs:
       - name: Test read-only IPSW probe fixtures
         run: |
           python3 - <<'PY'
-          import plistlib, zipfile
-          from pathlib import Path
+          import plistlib
+          import zipfile
 
-          def make(path, with_restore_path):
-              ident = {
-                  "ApBoardID": "0x04",
-                  "ApChipID": "0x6040",
-                  "Info": {
-                      "DeviceClass": "j614sap",
-                      "RestoreBehavior": "Erase",
-                      "Variant": "macOS Customer",
-                      "BuildNumber": "25F84",
-                  },
-                  "Manifest": {
-                      "BaseSystem": {
-                          "Info": {"Path": "BaseSystem.dmg.aea"}
-                      }
-                  },
+          def make(path, bless2):
+              manifest = {
+                  "BuildIdentities": [{
+                      "ApBoardID": "0x04",
+                      "ApChipID": "0x6040",
+                      "Info": {
+                          "DeviceClass": "j614sap",
+                          "RestoreBehavior": "Erase",
+                          "Variant": "macOS Customer",
+                          "BuildNumber": "24B2083",
+                      },
+                      "Manifest": {
+                          "BaseSystem": {
+                              "Info": {"Path": "BaseSystem.dmg.aea"}
+                          },
+                          "SEP": {
+                              "Info": {"Path": "Firmware/sep-firmware.img4"}
+                          },
+                      },
+                  }]
               }
-              bless2 = {"SomeTahoeKey": "value"}
-              if with_restore_path:
-                  bless2["RestoreBundlePath"] = "./restore"
+              sysver = {
+                  "ProductVersion": "15.1",
+                  "ProductBuildVersion": "24B2083",
+              }
 
               with zipfile.ZipFile(path, "w") as zf:
-                  zf.writestr("BuildManifest.plist", plistlib.dumps({"BuildIdentities": [ident]}))
-                  zf.writestr(
-                      "usr/standalone/bootcaches.plist",
-                      plistlib.dumps({"bless2": bless2}),
-                  )
-                  zf.writestr(
-                      "SystemVersion.plist",
-                      plistlib.dumps({
-                          "ProductVersion": "26.5.2",
-                          "ProductBuildVersion": "25F84",
-                      }),
-                  )
-                  zf.writestr("BaseSystem.dmg.aea", b"fixture")
+                  for name, obj in [
+                      ("BuildManifest.plist", manifest),
+                      ("usr/standalone/bootcaches.plist", {"bless2": bless2}),
+                      ("SystemVersion.plist", sysver),
+                      ("RestoreVersion.plist", {"ProductVersion": "15.1"}),
+                      ("PlatformSupport.plist", {"SupportedModelProperties": []}),
+                  ]:
+                      zf.writestr(name, plistlib.dumps(obj))
 
-          make("/tmp/probe-pass.ipsw", True)
-          make("/tmp/probe-fail.ipsw", False)
+                  zf.writestr("BaseSystem.dmg.aea", b"fixture")
+                  zf.writestr("Firmware/sep-firmware.img4", b"fixture")
+                  zf.writestr(
+                      "BootabilityBundle/Restore/Firmware/Bootability.dmg.trustcache",
+                      b"fixture",
+                  )
+                  zf.writestr(
+                      "BootabilityBundle/Restore/Bootability/BootabilityBrain.framework/fixture",
+                      b"fixture",
+                  )
+                  zf.writestr(
+                      "Firmware/Manifests/restore/macOS Customer/apticket.fixture.im4m",
+                      b"fixture",
+                  )
+
+          common = {"SupportsExternalPrebootObjects": True}
+          legacy = {
+              **common,
+              "RestoreBundlePath": "./Restore",
+              "SupportsPairedRecovery": True,
+          }
+          paired = {
+              **common,
+              "SupportsPairedRecovery": True,
+          }
+          invalid = dict(common)
+
+          make("/tmp/probe-legacy.ipsw", legacy)
+          make("/tmp/probe-paired.ipsw", paired)
+          make("/tmp/probe-invalid.ipsw", invalid)
           PY
 
-          python3 tools/j614s/installer/probe_ipsw.py /tmp/probe-pass.ipsw
-          if python3 tools/j614s/installer/probe_ipsw.py /tmp/probe-fail.ipsw; then
-            echo "expected missing RestoreBundlePath fixture to fail" >&2
+          python3 tools/j614s/installer/probe_ipsw.py --json /tmp/probe-legacy.ipsw > /tmp/legacy.json
+          python3 tools/j614s/installer/probe_ipsw.py --json /tmp/probe-paired.ipsw > /tmp/paired.json
+
+          python3 - <<'PY'
+          import json
+
+          legacy = json.load(open("/tmp/legacy.json"))
+          paired = json.load(open("/tmp/paired.json"))
+
+          assert legacy["restore_strategy"] == "legacy-explicit"
+          assert legacy["restore_bundle_path"] == "Restore"
+          assert paired["restore_strategy"] == "paired-implicit"
+          assert paired["restore_bundle_path"] == "restore"
+          assert paired["base_system_aea"] is True
+          assert paired["manifest_paths_checked"] == 1
+          PY
+
+          if python3 tools/j614s/installer/probe_ipsw.py /tmp/probe-invalid.ipsw; then
+            echo "expected invalid restore metadata fixture to fail" >&2
             exit 1
           fi
 
@@ -83,89 +128,59 @@ jobs:
         run: |
           cp -a /tmp/asahi /tmp/asahi-source
           python3 tools/j614s/installer/patch_installer.py /tmp/asahi-source
+          python3 tools/j614s/installer/patch_installer.py /tmp/asahi-source
           python3 -m py_compile /tmp/asahi-source/src/main.py /tmp/asahi-source/src/stub.py
-          grep -q '0x6040: "26.5.2"' /tmp/asahi-source/src/main.py
-          grep -q '"j614sap": Device("26.5.2", True)' /tmp/asahi-source/src/main.py
+
+          grep -q '0x6040: "15.1"' /tmp/asahi-source/src/main.py
+          grep -q '"j614sap": Device("15.1", True)' /tmp/asahi-source/src/main.py
+          grep -q 'IPSW("15.1"' /tmp/asahi-source/src/main.py
+
           grep -q 'def copy_aea_compress' /tmp/asahi-source/src/stub.py
+          grep -q 'def get_restore_bundle_relpath' /tmp/asahi-source/src/stub.py
+          grep -q 'SupportsPairedRecovery' /tmp/asahi-source/src/stub.py
+          grep -q 'relpath = "restore"' /tmp/asahi-source/src/stub.py
+          grep -q 'if restore_path_explicit:' /tmp/asahi-source/src/stub.py
+          ! grep -q 'bless2\["RestoreBundlePath"\]' /tmp/asahi-source/src/stub.py
 
       - name: Patch flattened release layout
         run: |
           mkdir -p /tmp/asahi-flat
           cp /tmp/asahi/src/main.py /tmp/asahi-flat/main.py
           cp /tmp/asahi/src/stub.py /tmp/asahi-flat/stub.py
+
+          python3 tools/j614s/installer/patch_installer.py /tmp/asahi-flat
           python3 tools/j614s/installer/patch_installer.py /tmp/asahi-flat
           python3 -m py_compile /tmp/asahi-flat/main.py /tmp/asahi-flat/stub.py
-          grep -q '0x6040: "26.5.2"' /tmp/asahi-flat/main.py
+
+          grep -q '0x6040: "15.1"' /tmp/asahi-flat/main.py
           grep -q 'base_system_src.endswith(".aea")' /tmp/asahi-flat/stub.py
+          grep -q 'def get_restore_bundle_relpath' /tmp/asahi-flat/stub.py
+          ! grep -q 'bless2\["RestoreBundlePath"\]' /tmp/asahi-flat/stub.py
 
-      - name: Test read-only IPSW probe fixtures
+      - name: Probe real original J614s macOS 15.1 IPSW
+        env:
+          PYTHONPATH: /tmp/asahi/src
         run: |
+          python3 tools/j614s/installer/probe_ipsw.py --json \
+            https://updates.cdn-apple.com/2024FallFCS/fullrestores/072-12302/3786987A-AD94-4BFB-81B8-56D3841CA81B/UniversalMac_15.1_24B2083_Restore.ipsw \
+            > /tmp/j614s-15.1.json
+
           python3 - <<'PY'
-          import plistlib, zipfile
-          from pathlib import Path
+          import json
 
-          def make(path, restore_path):
-              manifest = {
-                  "BuildIdentities": [{
-                      "ApBoardID": "0x04",
-                      "ApChipID": "0x6040",
-                      "Info": {
-                          "DeviceClass": "j614sap",
-                          "RestoreBehavior": "Erase",
-                          "Variant": "macOS Customer",
-                          "BuildNumber": "25F84",
-                      },
-                      "Manifest": {
-                          "BaseSystem": {"Info": {"Path": "arm64eBaseSystem.dmg.aea"}}
-                      },
-                  }]
-              }
-              bootcaches = {"bless2": {}}
-              if restore_path is not None:
-                  bootcaches["bless2"]["RestoreBundlePath"] = restore_path
-              sysver = {"ProductVersion": "26.5.2", "ProductBuildVersion": "25F84"}
-
-              with zipfile.ZipFile(path, "w") as zf:
-                  for name, obj in [
-                      ("BuildManifest.plist", manifest),
-                      ("usr/standalone/bootcaches.plist", bootcaches),
-                      ("SystemVersion.plist", sysver),
-                  ]:
-                      zf.writestr(name, plistlib.dumps(obj))
-                  zf.writestr("arm64eBaseSystem.dmg.aea", b"fixture")
-
-          make("/tmp/probe-pass.ipsw", "./Restore")
-          make("/tmp/probe-fail.ipsw", None)
+          result = json.load(open("/tmp/j614s-15.1.json"))
+          assert result["product_version"] == "15.1"
+          assert result["product_build"] == "24B2083"
+          assert result["device_class"] == "j614sap"
+          assert result["chip_id"] == "0x6040"
+          assert result["board_id"] == "0x04"
+          assert result["restore_strategy"] == "paired-implicit"
+          assert result["restore_bundle_path"] == "restore"
+          assert result["base_system_aea"] is True
+          assert result["supports_paired_recovery"] is True
+          assert result["supports_external_preboot_objects"] is True
+          assert result["manifest_paths_checked"] > 0
           PY
-
-          python3 tools/j614s/installer/probe_ipsw.py /tmp/probe-pass.ipsw
-          set +e
-          python3 tools/j614s/installer/probe_ipsw.py /tmp/probe-fail.ipsw
-          rc=$?
-          set -e
-          test "$rc" -eq 2
-
-      - name: Probe original J614s macOS 15.1 restore metadata
-        env:
-          PYTHONPATH: /tmp/asahi/src
-        run: |
-          set +e
-          python3 tools/j614s/installer/probe_ipsw.py --dump-bless2 \
-            https://updates.cdn-apple.com/2024FallFCS/fullrestores/072-12302/3786987A-AD94-4BFB-81B8-56D3841CA81B/UniversalMac_15.1_24B2083_Restore.ipsw
-          rc=$?
-          set -e
-          test "$rc" -eq 2
-
-      - name: Dump J614s macOS 26.5.2 bless2 metadata
-        env:
-          PYTHONPATH: /tmp/asahi/src
-        run: |
-          set +e
-          python3 tools/j614s/installer/probe_ipsw.py --dump-bless2 \
-            https://updates.cdn-apple.com/2026SpringFCS/fullrestores/140-24263/B95838F0-6815-4F0B-A039-156526C081AD/UniversalMac_26.5.2_25F84_Restore.ipsw
-          rc=$?
-          set -e
-          test "$rc" -eq 2
 
       - name: Verify tethered-only profile
         run: |
@@ -179,7 +194,7 @@ jobs:
           profile = data["os_list"][0]
           assert profile["expert"] is True
           assert profile["boot_object"] == "m1n1.bin"
-          assert profile["supported_fw"] == ["26.5.2"]
+          assert profile["supported_fw"] == ["15.1"]
           assert profile["partitions"] == []
           PY
 
