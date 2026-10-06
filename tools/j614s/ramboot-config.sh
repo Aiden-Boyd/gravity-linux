@@ -86,6 +86,11 @@ diagnostic|yolo)
 		module CONFIG_USB_XHCI_HCD
 	else
 		# YOLO: same reviewed nodes, but let supported drivers probe at boot.
+		# arm64 defconfig leaves RFKILL modular; that caps CFG80211 and
+		# BRCMFMAC at =m even when requested built-in. Make the dependency
+		# built-in too so Wi-Fi can actually probe automatically.
+		enable CONFIG_RFKILL
+		enable CONFIG_CFG80211
 		enable CONFIG_PINCTRL_APPLE_GPIO
 		enable CONFIG_APPLE_MAILBOX
 		enable CONFIG_APPLE_RTKIT
