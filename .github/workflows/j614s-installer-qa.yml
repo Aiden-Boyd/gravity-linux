@@ -22,8 +22,45 @@ jobs:
           bash -n tools/j614s/installer/bootstrap.sh
           python3 -m py_compile tools/j614s/installer/patch_installer.py
           python3 -m py_compile tools/j614s/installer/probe_ipsw.py
+          python3 -m py_compile tools/j614s/installer/probe_host.py
           python3 -m py_compile tools/j614s/installer/probe_local_layout.py
           python3 -m json.tool tools/j614s/installer/installer_data.json >/dev/null
+
+      - name: Test host Recovery alignment logic
+        run: |
+          python3 - <<'PY'
+          import importlib.util
+          from pathlib import Path
+
+          path = Path("tools/j614s/installer/probe_host.py")
+          spec = importlib.util.spec_from_file_location("probe_host", path)
+          mod = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(mod)
+
+          good = {
+              "macos_version": "26.6.2",
+              "sfr_version": "26.6.2",
+              "system_recovery_version": "26.6.2",
+              "boot_mode": "macOS",
+              "boot_vgid": "A",
+              "default_boot_vgid": "A",
+          }
+          ready, reasons = mod.evaluate_alignment(good)
+          assert ready is True
+          assert reasons == []
+
+          mismatch = dict(good)
+          mismatch["system_recovery_version"] = "26.3"
+          ready, reasons = mod.evaluate_alignment(mismatch)
+          assert ready is False
+          assert any("version mismatch" in reason for reason in reasons)
+
+          wrong_default = dict(good)
+          wrong_default["default_boot_vgid"] = "B"
+          ready, reasons = mod.evaluate_alignment(wrong_default)
+          assert ready is False
+          assert any("Default boot VGID".lower() in reason.lower() for reason in reasons)
+          PY
 
       - name: Test read-only IPSW probe fixtures
         run: |
