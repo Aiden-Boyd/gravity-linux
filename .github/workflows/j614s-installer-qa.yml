@@ -24,6 +24,7 @@ jobs:
           python3 -m py_compile tools/j614s/installer/probe_ipsw.py
           python3 -m py_compile tools/j614s/installer/probe_host.py
           python3 -m py_compile tools/j614s/installer/probe_local_layout.py
+          python3 -m py_compile tools/j614s/installer/cleanup_partial.py
           python3 -m json.tool tools/j614s/installer/installer_data.json >/dev/null
 
       - name: Test host Recovery alignment logic
@@ -75,6 +76,86 @@ jobs:
           ready, reasons = mod.evaluate_alignment(wrong_default)
           assert ready is False
           assert any("Default boot VGID".lower() in reason.lower() for reason in reasons)
+          PY
+
+      - name: Test guarded partial cleanup selection
+        run: |
+          python3 - <<'PY'
+          import importlib.util
+          from pathlib import Path
+
+          path = Path("tools/j614s/installer/cleanup_partial.py")
+          spec = importlib.util.spec_from_file_location("cleanup_partial", path)
+          mod = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(mod)
+
+          boot = {
+              "ContainerReference": "disk3",
+              "CapacityCeiling": 480_000_344_064,
+              "PhysicalStores": [{"DeviceIdentifier": "disk0s2"}],
+              "Volumes": [
+                  {
+                      "DeviceIdentifier": "disk3s5",
+                      "Name": "Data",
+                      "Roles": ["Data"],
+                  }
+              ],
+          }
+          stub = {
+              "ContainerReference": "disk4",
+              "CapacityCeiling": 2_499_805_184,
+              "PhysicalStores": [{"DeviceIdentifier": "disk0s5"}],
+              "Volumes": [
+                  {
+                      "DeviceIdentifier": "disk4s1",
+                      "Name": "Gravity Linux J614s Dev - Data",
+                      "Roles": ["Data"],
+                  },
+                  {
+                      "DeviceIdentifier": "disk4s2",
+                      "Name": "Gravity Linux J614s Dev",
+                      "Roles": ["System"],
+                  },
+                  {
+                      "DeviceIdentifier": "disk4s3",
+                      "Name": "Preboot",
+                      "Roles": ["Preboot"],
+                  },
+                  {
+                      "DeviceIdentifier": "disk4s4",
+                      "Name": "Recovery",
+                      "Roles": ["Recovery"],
+                  },
+              ],
+          }
+
+          boot_ref, candidate = mod.find_candidate(
+              {"Containers": [boot, stub]}, "disk3s5"
+          )
+          assert boot_ref == "disk3"
+          assert candidate[0] == "disk4"
+          assert candidate[1] == "disk0s5"
+
+          bad = dict(stub)
+          bad["CapacityCeiling"] = 20_000_000_000
+          try:
+              mod.find_candidate({"Containers": [boot, bad]}, "disk3s5")
+          except RuntimeError:
+              pass
+          else:
+              raise SystemExit("oversized non-stub container was not rejected")
+
+          duplicate = dict(stub)
+          duplicate["ContainerReference"] = "disk5"
+          duplicate["PhysicalStores"] = [{"DeviceIdentifier": "disk0s6"}]
+          try:
+              mod.find_candidate(
+                  {"Containers": [boot, stub, duplicate]}, "disk3s5"
+              )
+          except RuntimeError:
+              pass
+          else:
+              raise SystemExit("ambiguous partial stub layout was not rejected")
           PY
 
       - name: Test read-only IPSW probe fixtures
