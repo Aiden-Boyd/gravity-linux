@@ -166,6 +166,19 @@ M1N1_VER=$(
 )
 echo "  m1n1: $M1N1_VER"
 
+echo
+echo "Checking host firmware / SystemRecovery alignment (read-only)..."
+set +e
+"$PY" "$SCRIPT_DIR/probe_host.py"
+HOST_PROBE_RC=$?
+set -e
+if [ "$HOST_PROBE_RC" -eq 1 ]; then
+    fail "host firmware/Recovery probe could not complete"
+fi
+if [ "$HOST_PROBE_RC" -ne 0 ] && [ "$MODE" = "install" ]; then
+    fail "host firmware/SystemRecovery alignment is not ready for boot-policy work"
+fi
+
 if [ "$MODE" = "local-probe" ]; then
     echo
     echo "Inspecting currently working macOS Preboot/paired-Recovery layout (read-only)..."
@@ -186,6 +199,9 @@ fi
 if [ "$MODE" = "probe" ]; then
     echo
     echo "Read-only probe complete. No APFS, boot-policy, or Recovery changes were made."
+    if [ "$HOST_PROBE_RC" -ne 0 ]; then
+        fail "IPSW/stub plan is compatible, but host firmware/SystemRecovery alignment blocks installation"
+    fi
     exit 0
 fi
 
