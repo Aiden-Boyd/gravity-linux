@@ -74,10 +74,31 @@ struct dchid_init_hdr {
 #define INIT_TERMINATOR		2
 #define INIT_PRODUCT_NAME	7
 
-#define CMD_RESET_INTERFACE 0x40
+/*
+ * 0x40 is an interface power request, not the reset-interface command.
+ * J614s/T6040 firmware requires the 9-byte v2 will/has-change form.
+ * Contract and live validation derived from Project Wallace ticket 230.
+ */
+#define CMD_SET_POWER 0x40
 #define CMD_SEND_FIRMWARE 0x95
 #define CMD_ENABLE_INTERFACE 0xb4
 #define CMD_ACK_GPIO_CMD 0xa1
+
+#define PWR_REQ_V1 1
+#define PWR_REQ_V2 2
+#define PWR_PHASE_WILL_CHANGE 0
+#define PWR_PHASE_HAS_CHANGED 1
+#define PWR_STATE_OFF 0
+#define PWR_STATE_ON 2
+
+struct dchid_power_req {
+	u8 cmd;
+	u8 version;
+	u8 iface;
+	u8 state;
+	u8 phase;
+	__le32 status;
+} __packed;
 
 struct dchid_init_block_hdr {
 	u16 type;
@@ -183,6 +204,7 @@ struct dockchannel_hid {
 	struct device_link *helper_link;
 
 	bool id_ready;
+	bool power_req_v1;
 	struct dchid_stm_id device_id;
 	char serial[64];
 
@@ -368,11 +390,35 @@ static int dchid_enable_interface(struct dchid_iface *iface)
 	return dchid_comm_cmd(iface->dchid, msg, sizeof(msg));
 }
 
-static int dchid_reset_interface(struct dchid_iface *iface, int state)
+static int dchid_set_interface_power(struct dchid_iface *iface, int state)
 {
-	u8 msg[] = { CMD_RESET_INTERFACE, 1, iface->index, state };
+	struct dockchannel_hid *dchid = iface->dchid;
+	struct dchid_power_req req = {
+		.cmd = CMD_SET_POWER,
+		.version = PWR_REQ_V2,
+		.iface = iface->index,
+		.state = (u8)state,
+		.phase = PWR_PHASE_WILL_CHANGE,
+		.status = cpu_to_le32(0),
+	};
+	u8 msg[] = { CMD_SET_POWER, PWR_REQ_V1, iface->index, (u8)state };
+	int ret;
 
-	return dchid_comm_cmd(iface->dchid, msg, sizeof(msg));
+	if (!dchid->power_req_v1) {
+		ret = dchid_comm_cmd(dchid, &req, sizeof(req));
+		if (ret >= 0) {
+			req.phase = PWR_PHASE_HAS_CHANGED;
+			return dchid_comm_cmd(dchid, &req, sizeof(req));
+		}
+		if (ret != -EIO)
+			return ret;
+
+		dev_info(dchid->dev,
+			 "v2 interface-power request rejected, using v1 requests\n");
+		dchid->power_req_v1 = true;
+	}
+
+	return dchid_comm_cmd(dchid, msg, sizeof(msg));
 }
 
 static int dchid_send_firmware(struct dchid_iface *iface, void *firmware, size_t size)
@@ -515,10 +561,17 @@ static int dchid_start_interface(struct dchid_iface *iface)
 			goto err;
 		}
 
-		/* After loading firmware, multi-touch needs a reset */
-		dev_info(iface->dchid->dev, "Resetting %s\n", iface->name);
-		dchid_reset_interface(iface, 0);
-		dchid_reset_interface(iface, 2);
+		/*
+		 * After upload, power-cycle the interface so the MTP coprocessor
+		 * consumes the new firmware. J614s requires the v2 request pair.
+		 */
+		dev_info(iface->dchid->dev, "Cycling interface power for %s\n", iface->name);
+		ret = dchid_set_interface_power(iface, PWR_STATE_OFF);
+		if (ret < 0)
+			goto err;
+		ret = dchid_set_interface_power(iface, PWR_STATE_ON);
+		if (ret < 0)
+			goto err;
 	}
 
 	return 0;

@@ -4,8 +4,8 @@
 
 set -eu
 
-EXPECTED_M1N1_VERSION="v1.6.1"
-EXPECTED_M1N1_COMMIT="06a4601a351ebfd1abb6abba9a44c34e40d94776"
+EXPECTED_M1N1_VERSION="v1.9.9"
+EXPECTED_M1N1_COMMIT="809541515659bf4e504807fd72bc0a539be5eee7"
 
 usage()
 {
@@ -68,16 +68,7 @@ PROFILE=$(tr -d '\r\n' < "$BUNDLE/PROFILE.txt")
 BOOTARGS=$(tr '\n' ' ' < "$BUNDLE/BOOTARGS.txt" | sed 's/[[:space:]][[:space:]]*/ /g; s/^ //; s/ $//')
 
 case "$PROFILE" in
-    safe)
-        case " $BOOTARGS " in
-            *" nr_cpus=1 "*) ;;
-            *) fail "SAFE bundle is missing nr_cpus=1" ;;
-        esac
-        case " $BOOTARGS " in
-            *" maxcpus=1 "*) ;;
-            *) fail "SAFE bundle is missing maxcpus=1" ;;
-        esac
-        ;;
+    safe) ;;
     diagnostic|yolo)
         [ "${J614S_ALLOW_EXPERIMENTAL:-}" = "YES" ] ||
             fail "$PROFILE profile refused; set J614S_ALLOW_EXPERIMENTAL=YES only for intentional staged bring-up"
@@ -87,13 +78,18 @@ case "$PROFILE" in
         ;;
 esac
 
-case " $BOOTARGS " in
-    *" root="*) fail "RAM-only loader refuses bootargs containing root=" ;;
-esac
+# Every current J614s profile is deliberately single-CPU. Exact-model testing
+# has a reproducible T6040 multi-core page-copy/MM fault, so SMP gets its own
+# future diagnostic profile instead of being enabled accidentally.
+for required_arg in nr_cpus=1 maxcpus=1 idle=nop arm64.nowfxt panic=0; do
+    case " $BOOTARGS " in
+        *" $required_arg "*) ;;
+        *) fail "$PROFILE bundle is missing required M4 bring-up argument: $required_arg" ;;
+    esac
+done
 
 case " $BOOTARGS " in
-    *" panic=0 "*) ;;
-    *) fail "bring-up bundle must use panic=0 so kernel panics stay visible on the console" ;;
+    *" root="*) fail "RAM-only loader refuses bootargs containing root=" ;;
 esac
 
 if command -v dtc >/dev/null 2>&1; then
@@ -112,7 +108,8 @@ echo
 echo "J614s tethered RAM-boot preflight passed"
 echo "  profile:   $PROFILE"
 echo "  bundle:    $BUNDLE"
-echo "  m1n1:      $M1N1 ($EXPECTED_M1N1_VERSION / ${M1N1_HEAD%????????????????????????????????})"
+M1N1_SHORT=$(printf '%.12s' "$M1N1_HEAD")
+echo "  m1n1:      $M1N1 ($EXPECTED_M1N1_VERSION / $M1N1_SHORT)"
 echo "  bootargs:  $BOOTARGS"
 if [ -n "${M1N1DEVICE:-}" ]; then
     echo "  device:    $M1N1DEVICE"

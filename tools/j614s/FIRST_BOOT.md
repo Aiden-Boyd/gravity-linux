@@ -30,9 +30,13 @@ Both modes are read-only with respect to APFS and boot policy. The deep probe
 downloads temporary files and verifies that the J614s 15.1 BaseSystem AEA path
 can actually be decrypted.
 
-The bootstrap is intentionally pinned to Asahi installer `v0.9.2` with
-embedded m1n1 `v1.6.1`, the pair reviewed for this bring-up. Updating either
-version is a code-review event, not an automatic `latest` upgrade.
+The bootstrap keeps the reviewed Asahi installer logic at `v0.9.2`, but
+replaces its older stage-2 binary with the signed m1n1 `v1.9.9` release
+(commit `809541515659bf4e504807fd72bc0a539be5eee7`). The release ZIP is pinned
+by SHA-256 `4cb44a43298723ab1fcc1347a180e88fdb0899007b2bd0979ec60563d6505010`.
+This is deliberate: v1.9.9 contains post-v1.6.1 M4 SMP/cache, WFI/WFIT, MCC,
+NVMe and USB-C fixes. Neither installer nor m1n1 follows a moving `latest`
+pointer.
 
 Normal installer mode is intentionally separate because it *does* create the
 stub environment and enters Apple's authenticated boot-policy flow. Have a
@@ -46,6 +50,11 @@ GitHub Actions builds three RAM-boot bundles:
 - `j614s-ramboot-diagnostic`: single CPU, reviewed hardware nodes, drivers as modules.
 - `j614s-ramboot-yolo`: reviewed nodes probe automatically; not a first-boot profile.
 
+All three profiles currently force `nr_cpus=1 maxcpus=1 idle=nop arm64.nowfxt`.
+The WFI/WFIT flags are the current M4 bare-metal mitigation, while the one-CPU
+limit also avoids the reproducible J614s/T6040 multi-core page-copy/MM fault.
+SMP testing must be introduced as a separate, explicit diagnostic profile.
+
 The SAFE bundle is the only intended first hardware boot.
 
 All RAM-boot profiles use `panic=0` during bring-up. A kernel panic therefore
@@ -55,14 +64,14 @@ discarding the most useful failure evidence.
 ## Host-side loader
 
 Use a second Linux/macOS host connected to the target by USB-C and the exact
-reviewed m1n1 v1.6.1 checkout used by the enrolled stage-1 binary:
+reviewed m1n1 v1.9.9 checkout matching the enrolled stage-2 binary:
 
 ```sh
-git clone --depth 1 --branch v1.6.1 https://github.com/AsahiLinux/m1n1.git
+git clone --depth 1 --branch v1.9.9 https://github.com/AsahiLinux/m1n1.git
 ```
 
 The host loader verifies the checkout is commit
-`06a4601a351ebfd1abb6abba9a44c34e40d94776` before contacting the target.
+`809541515659bf4e504807fd72bc0a539be5eee7` before contacting the target.
 
 First validate the downloaded SAFE artifact without contacting the target:
 
@@ -92,3 +101,13 @@ does not automatically mount internal storage.
 
 Only after that baseline is stable should the diagnostic profile be used to
 load SMC, DART, DockChannel input, PCIe, SD and Wi-Fi one dependency at a time.
+
+## J614s trackpad protocol
+
+The DockChannel HID driver carries the J614s/T6040 interface-power protocol
+fix proven by Project Wallace: command 0x40 uses the 9-byte version-2
+will-change/has-changed request on J614s, with a version-1 fallback for older
+firmware. SAFE does not enable this driver. Diagnostic/yolo can exercise it
+only after the machine-specific trackpad firmware is supplied.
+
+The Apple firmware blob is intentionally not stored in this repository.

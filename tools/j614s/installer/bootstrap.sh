@@ -38,7 +38,15 @@ J614S_IPSW_URL="https://updates.cdn-apple.com/2024FallFCS/fullrestores/072-12302
 # Do not follow Asahi's moving "latest" pointer on an unsupported target.
 ASAHI_INSTALLER_VERSION="v0.9.2"
 ASAHI_INSTALLER_BASE="https://cdn.asahilinux.org/installer"
-EXPECTED_M1N1_VERSION="v1.6.1"
+
+# The installer package is kept at the already-reviewed v0.9.2 logic, but its
+# older stage-2 m1n1 is replaced with the signed v1.9.9 release. v1.9.9 carries
+# the post-v1.6.1 M4 SMP/cache, WFI/WFIT, MCC, NVMe and USB-C bring-up fixes.
+EXPECTED_M1N1_VERSION="v1.9.9"
+EXPECTED_M1N1_COMMIT="809541515659bf4e504807fd72bc0a539be5eee7"
+M1N1_RELEASE_ASSET="m1n1-stage2-v1.9.9.zip"
+M1N1_RELEASE_URL="https://github.com/AsahiLinux/m1n1/releases/download/v1.9.9/$M1N1_RELEASE_ASSET"
+M1N1_RELEASE_SHA256="4cb44a43298723ab1fcc1347a180e88fdb0899007b2bd0979ec60563d6505010"
 
 IPSW_TOOL_VERSION="3.1.730"
 IPSW_TOOL_ARCHIVE="ipsw_3.1.730_macOS_arm64.tar.gz"
@@ -175,12 +183,39 @@ if [ -f "$TMP/Frameworks/Python.framework/Versions/Current/etc/openssl/cert.pem"
     export SSL_CERT_FILE="$TMP/Frameworks/Python.framework/Versions/Current/etc/openssl/cert.pem"
 fi
 
+echo
+echo "Replacing packaged stage-2 with reviewed m1n1 $EXPECTED_M1N1_VERSION..."
+curl -fL --progress-bar -o "$M1N1_RELEASE_ASSET" "$M1N1_RELEASE_URL"
+M1N1_RELEASE_ACTUAL_SHA=$(/usr/bin/shasum -a 256 "$M1N1_RELEASE_ASSET" | awk '{print $1}')
+[ "$M1N1_RELEASE_ACTUAL_SHA" = "$M1N1_RELEASE_SHA256" ] ||
+    fail "m1n1 release SHA-256 mismatch (got $M1N1_RELEASE_ACTUAL_SHA)"
+
+"$PY" - "$M1N1_RELEASE_ASSET" "$TMP/boot/m1n1.bin" <<'PY'
+import pathlib
+import shutil
+import sys
+import zipfile
+
+archive = pathlib.Path(sys.argv[1])
+dest = pathlib.Path(sys.argv[2])
+with zipfile.ZipFile(archive) as zf:
+    matches = [n for n in zf.namelist() if n.rstrip("/").endswith("m1n1.bin")]
+    if len(matches) != 1:
+        raise SystemExit(f"expected exactly one m1n1.bin in release asset, got {matches!r}")
+    with zf.open(matches[0]) as src, dest.open("wb") as out:
+        shutil.copyfileobj(src, out)
+PY
+
+if ! /usr/bin/strings ./boot/m1n1.bin | grep -qi "t6040"; then
+    fail "reviewed m1n1 release does not advertise T6040 support"
+fi
+
 M1N1_VER=$(
     "$PY" -c 'import m1n1; print(m1n1.get_version("boot/m1n1.bin") or "unknown")'
 )
-echo "  m1n1: $M1N1_VER"
+echo "  m1n1: $M1N1_VER ($EXPECTED_M1N1_COMMIT)"
 [ "$M1N1_VER" = "$EXPECTED_M1N1_VERSION" ] ||
-    fail "reviewed installer expects m1n1 $EXPECTED_M1N1_VERSION, downloaded package contains $M1N1_VER"
+    fail "reviewed installer expects m1n1 $EXPECTED_M1N1_VERSION, release asset contains $M1N1_VER"
 
 if [ "$MODE" = "cleanup-partial" ]; then
     echo
@@ -271,7 +306,7 @@ cp "$SCRIPT_DIR/installer_data.json" "$TMP/installer_data.json"
 echo
 echo "Patched installer ready:"
 echo "  Asahi installer: $ASAHI_VERSION"
-echo "  m1n1:            $M1N1_VER"
+echo "  m1n1:            $M1N1_VER ($EXPECTED_M1N1_COMMIT)"
 echo "  AEA helper:      ipsw v$IPSW_TOOL_VERSION (SHA-256 verified)"
 echo "  Target:          Mac16,8 / j614sap / T6040"
 echo "  Stub firmware:   macOS 15.1 (24B2083)"
