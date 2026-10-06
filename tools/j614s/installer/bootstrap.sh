@@ -34,8 +34,11 @@ esac
 
 J614S_IPSW_URL="https://updates.cdn-apple.com/2024FallFCS/fullrestores/072-12302/3786987A-AD94-4BFB-81B8-56D3841CA81B/UniversalMac_15.1_24B2083_Restore.ipsw"
 
-ASAHI_VERSION_URL="https://cdn.asahilinux.org/installer/latest"
+# Pin the exact upstream installer/m1n1 pair reviewed for J614s bring-up.
+# Do not follow Asahi's moving "latest" pointer on an unsupported target.
+ASAHI_INSTALLER_VERSION="v0.9.2"
 ASAHI_INSTALLER_BASE="https://cdn.asahilinux.org/installer"
+EXPECTED_M1N1_VERSION="v1.6.1"
 
 IPSW_TOOL_VERSION="3.1.730"
 IPSW_TOOL_ARCHIVE="ipsw_3.1.730_macOS_arm64.tar.gz"
@@ -134,11 +137,7 @@ fi
 echo
 
 echo "Downloading upstream Asahi installer..."
-if [ -n "${ASAHI_INSTALLER_VERSION:-}" ]; then
-    ASAHI_VERSION="$ASAHI_INSTALLER_VERSION"
-else
-    ASAHI_VERSION=$(curl -fsSL "$ASAHI_VERSION_URL")
-fi
+ASAHI_VERSION="$ASAHI_INSTALLER_VERSION"
 case "$ASAHI_VERSION" in
     ""|*[!A-Za-z0-9._-]*) fail "unexpected Asahi installer version string: '$ASAHI_VERSION'" ;;
 esac
@@ -180,6 +179,8 @@ M1N1_VER=$(
     "$PY" -c 'import m1n1; print(m1n1.get_version("boot/m1n1.bin") or "unknown")'
 )
 echo "  m1n1: $M1N1_VER"
+[ "$M1N1_VER" = "$EXPECTED_M1N1_VERSION" ] ||
+    fail "reviewed installer expects m1n1 $EXPECTED_M1N1_VERSION, downloaded package contains $M1N1_VER"
 
 if [ "$MODE" = "cleanup-partial" ]; then
     echo

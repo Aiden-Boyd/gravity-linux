@@ -30,6 +30,10 @@ Both modes are read-only with respect to APFS and boot policy. The deep probe
 downloads temporary files and verifies that the J614s 15.1 BaseSystem AEA path
 can actually be decrypted.
 
+The bootstrap is intentionally pinned to Asahi installer `v0.9.2` with
+embedded m1n1 `v1.6.1`, the pair reviewed for this bring-up. Updating either
+version is a code-review event, not an automatic `latest` upgrade.
+
 Normal installer mode is intentionally separate because it *does* create the
 stub environment and enters Apple's authenticated boot-policy flow. Have a
 current backup before that step.
