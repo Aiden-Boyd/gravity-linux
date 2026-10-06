@@ -30,6 +30,12 @@ jobs:
         with:
           fetch-depth: 1
 
+      - name: Validate first-boot tooling
+        run: |
+          sh -n tools/j614s/tethered-boot.sh
+          sh -n tools/j614s/installer/bootstrap.sh
+          python3 -m py_compile tools/j614s/installer/*.py
+
       - name: Install build dependencies
         run: |
           sudo apt-get update
