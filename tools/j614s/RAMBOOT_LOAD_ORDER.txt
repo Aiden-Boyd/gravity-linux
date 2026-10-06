@@ -16,6 +16,7 @@ Then load in dependency order, checking dmesg after EVERY command:
   modprobe apple-mailbox
   modprobe apple-rtkit
   modprobe macsmc
+  modprobe gpio-macsmc
 
   modprobe apple-dart
 
