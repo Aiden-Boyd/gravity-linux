@@ -111,3 +111,11 @@ firmware. SAFE does not enable this driver. Diagnostic/yolo can exercise it
 only after the machine-specific trackpad firmware is supplied.
 
 The Apple firmware blob is intentionally not stored in this repository.
+
+## Additional J614s runtime guards
+
+The T6040 AIC path avoids firmware-locked EL2 guest-timer/vGIC system
+registers, the MTP ASC mailbox uses the measured J614s interrupt ordering
+`793, 792, 795, 794`, and DockChannel HID rejects invalid interface indices
+and recovers its interface-start state after timeouts. These are runtime
+guards; they complement, rather than replace, the single-CPU/WFI mitigations.

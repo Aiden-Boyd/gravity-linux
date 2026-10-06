@@ -260,6 +260,7 @@ struct aic_info {
 	/* Features */
 	bool fast_ipi;
 	bool local_fast_ipi;
+	bool locked_el2_sysregs;
 };
 
 static const struct aic_info aic1_info __initconst = {
@@ -306,6 +307,22 @@ static const struct aic_info aic3_info __initconst = {
 	.local_fast_ipi = true,
 };
 
+static const struct aic_info t6040_aic3_info __initconst = {
+	.version	= 3,
+
+	.irq_cfg	= AIC3_IRQ_CFG,
+
+	.fast_ipi	= true,
+	.local_fast_ipi = true,
+
+	/*
+	 * T6040 raw-boot firmware leaves the guest-timer FIQ control and
+	 * ICH_HCR_EL2 registers locked. Accessing either can SError, so keep
+	 * Linux away from them until firmware/EL2 ownership is understood.
+	 */
+	.locked_el2_sysregs = true,
+};
+
 static const struct of_device_id aic_info_match[] = {
 	{
 		.compatible = "apple,t8103-aic",
@@ -322,6 +339,10 @@ static const struct of_device_id aic_info_match[] = {
 	{
 		.compatible = "apple,aic2",
 		.data = &aic2_info,
+	},
+	{
+		.compatible = "apple,t6040-aic3",
+		.data = &t6040_aic3_info,
 	},
 	{
 		.compatible = "apple,t8122-aic3",
@@ -426,6 +447,7 @@ static void __exception_irq_entry aic_handle_irq(struct pt_regs *regs)
 	 * in use, and be cleared when coming back from the handler.
 	 */
 	if (is_kernel_in_hyp_mode() &&
+	    !ic->info.locked_el2_sysregs &&
 	    (read_sysreg_s(SYS_ICH_HCR_EL2) & ICH_HCR_EL2_En) &&
 	    read_sysreg_s(SYS_ICH_MISR_EL2) != 0) {
 		u64 val;
@@ -499,6 +521,9 @@ static unsigned long aic_fiq_get_idx(struct irq_data *d)
 
 static void aic_fiq_set_mask(struct irq_data *d)
 {
+	if (aic_irqc->info.locked_el2_sysregs)
+		return;
+
 	/* Only the guest timers have real mask bits, unfortunately. */
 	switch (aic_fiq_get_idx(d)) {
 	case AIC_TMR_EL02_PHYS:
@@ -516,6 +541,9 @@ static void aic_fiq_set_mask(struct irq_data *d)
 
 static void aic_fiq_clear_mask(struct irq_data *d)
 {
+	if (aic_irqc->info.locked_el2_sysregs)
+		return;
+
 	switch (aic_fiq_get_idx(d)) {
 	case AIC_TMR_EL02_PHYS:
 		sysreg_clear_set_s(SYS_IMP_APL_VM_TMR_FIQ_ENA_EL2, 0, VM_TMR_FIQ_ENABLE_P);
@@ -583,7 +611,7 @@ static void __exception_irq_entry aic_handle_fiq(struct pt_regs *regs)
 		generic_handle_domain_irq(aic_irqc->hw_domain,
 					  AIC_FIQ_HWIRQ(AIC_TMR_EL0_VIRT));
 
-	if (is_kernel_in_hyp_mode()) {
+	if (is_kernel_in_hyp_mode() && !aic_irqc->info.locked_el2_sysregs) {
 		uint64_t enabled = read_sysreg_s(SYS_IMP_APL_VM_TMR_FIQ_ENA_EL2);
 
 		if ((enabled & VM_TMR_FIQ_ENABLE_P) &&
@@ -869,7 +897,7 @@ static int aic_init_cpu(unsigned int cpu)
 	sysreg_clear_set(cntv_ctl_el0, 0, ARCH_TIMER_CTRL_IT_MASK);
 
 	/* EL2-only (VHE mode) IRQ sources */
-	if (is_kernel_in_hyp_mode()) {
+	if (is_kernel_in_hyp_mode() && !aic_irqc->info.locked_el2_sysregs) {
 		/* Guest timers */
 		sysreg_clear_set_s(SYS_IMP_APL_VM_TMR_FIQ_ENA_EL2,
 				   VM_TMR_FIQ_ENABLE_V | VM_TMR_FIQ_ENABLE_P, 0);
@@ -989,6 +1017,9 @@ static int __init aic_of_ic_init(struct device_node *node, struct device_node *p
 		goto err_unmap;
 
 	irqc->info = *(struct aic_info *)match->data;
+
+	if (irqc->info.locked_el2_sysregs)
+		pr_info("T6040 EL2 guest-timer/vGIC sysregs are firmware-locked; leaving them untouched");
 
 	aic_irqc = irqc;
 

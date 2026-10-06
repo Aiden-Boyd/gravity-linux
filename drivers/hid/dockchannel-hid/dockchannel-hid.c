@@ -616,6 +616,7 @@ static int dchid_open(struct hid_device *hdev)
 
 		if (!wait_for_completion_timeout(&iface->ready, msecs_to_jiffies(START_TIMEOUT_MS))) {
 			dev_err(iface->dchid->dev, "iface %s start timed out\n", iface->name);
+			iface->starting = false;
 			return -ETIMEDOUT;
 		}
 	}
@@ -801,6 +802,7 @@ static void dchid_handle_ready(struct dockchannel_hid *dchid, void *data, size_t
 	}
 
 	dev_info(dchid->dev, "Interface %s is now ready\n", iface->name);
+	iface->starting = false;
 	complete_all(&iface->ready);
 
 	/* When STM is ready, grab global device info */
@@ -973,6 +975,12 @@ err:
 static void dchid_handle_event(struct dockchannel_hid *dchid, void *data, size_t length)
 {
 	u8 *p = data;
+
+	if (!length) {
+		dev_err(dchid->dev, "Received empty DockChannel event\n");
+		return;
+	}
+
 	switch (*p) {
 	case EVENT_INIT:
 		dchid_handle_init(dchid, data, length);
@@ -1012,7 +1020,7 @@ static void dchid_packet_work(struct work_struct *ws)
 	if (shdr->length + sizeof(*shdr) > work->hdr.length) {
 		dev_err(dchid->dev, "Bad sub header length (%hu > %zu)\n",
 			shdr->length, work->hdr.length - sizeof(*shdr));
-		return;
+		goto out;
 	}
 
 	switch (type) {
@@ -1027,6 +1035,7 @@ static void dchid_packet_work(struct work_struct *ws)
 		break;
 	}
 
+out:
 	kfree(work);
 }
 
@@ -1106,6 +1115,7 @@ static void dchid_handle_packet(void *cookie, size_t avail)
 
 	if (hdr.iface >= MAX_INTERFACES) {
 		dev_err(dchid->dev, "Bad iface %d\n", hdr.iface);
+		goto done;
 	}
 
 	iface = dchid->ifaces[hdr.iface];

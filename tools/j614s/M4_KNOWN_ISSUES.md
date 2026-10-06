@@ -52,3 +52,15 @@ than every experiment ticket. It is a bring-up ledger, not a support promise.
   108/231/305 (USB/PD), and cpufreq ticket 006.
 - Trackpad protocol adaptation is based on CJ Damsleth's GPL kernel patch
   `t6040-dockchannel-hid-reset-contract.patch`.
+
+## Hardened after initial audit
+
+- **AIC locked EL2 registers:** T6040 AICv3 now has an explicit quirk that
+  avoids all driver accesses to the firmware-locked guest-timer FIQ control
+  and ICH_HCR_EL2 registers. This extends the Project Wallace bring-up patch
+  from only the init writes to the later IRQ/FIQ mask/handler paths as well.
+- **MTP ASC mailbox interrupt order:** corrected to the exact J614s ADT order
+  `793, 792, 795, 794` (non-empty interrupt first in each ASC pair).
+- **DockChannel HID robustness:** invalid interface indices are rejected before
+  indexing, zero-length events are dropped, malformed packet work is freed,
+  and `starting` is cleared on ready and timeout so a failed start can retry.

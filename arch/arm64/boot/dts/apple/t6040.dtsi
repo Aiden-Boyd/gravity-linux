@@ -344,10 +344,15 @@
 			compatible = "apple,t8140-asc-mailbox", "apple,asc-mailbox-v4";
 			reg = <0x5 0x14608000 0x0 0x4000>;
 			interrupt-parent = <&aic>;
-			interrupts = <AIC_IRQ 792 IRQ_TYPE_LEVEL_HIGH>,
-				     <AIC_IRQ 793 IRQ_TYPE_LEVEL_HIGH>,
-				     <AIC_IRQ 794 IRQ_TYPE_LEVEL_HIGH>,
-				     <AIC_IRQ 795 IRQ_TYPE_LEVEL_HIGH>;
+			/*
+			 * J614s ADT orders ASC mailbox pairs non-empty first:
+			 * [793, 792, 795, 794]. Keep that order; reversing each pair
+			 * leaves MTP/DockChannel waiting on the wrong interrupt.
+			 */
+			interrupts = <AIC_IRQ 793 IRQ_TYPE_LEVEL_HIGH>,
+				     <AIC_IRQ 792 IRQ_TYPE_LEVEL_HIGH>,
+				     <AIC_IRQ 795 IRQ_TYPE_LEVEL_HIGH>,
+				     <AIC_IRQ 794 IRQ_TYPE_LEVEL_HIGH>;
 			interrupt-names = "send-empty", "send-not-empty",
 					  "recv-empty", "recv-not-empty";
 			#mbox-cells = <0>;

@@ -45,6 +45,8 @@ jobs:
           grep -q '"arm64.nowfxt"' arch/arm64/kernel/pi/idreg-override.c
           grep -q 'EXPECTED_M1N1_VERSION="v1.9.9"' tools/j614s/tethered-boot.sh
           grep -q 'PWR_REQ_V2' drivers/hid/dockchannel-hid/dockchannel-hid.c
+          grep -q 'locked_el2_sysregs' drivers/irqchip/irq-apple-aic.c
+          grep -q 'compatible = "apple,t6040-aic3"' drivers/irqchip/irq-apple-aic.c
 
           # Verify the exact signed m1n1 release artifact used by the installer.
           curl -fsSL -o /tmp/m1n1-stage2-v1.9.9.zip https://github.com/AsahiLinux/m1n1/releases/download/v1.9.9/m1n1-stage2-v1.9.9.zip
@@ -159,6 +161,7 @@ jobs:
           grep -q 'apple,dockchannel-hid' /tmp/j614s-all.dts
           grep -q 'apple,helper-cpu' /tmp/j614s-all.dts
           grep -q 'apple,rtk-helper-asc4' /tmp/j614s-all.dts
+          python3 -c 'import re; t=open("/tmp/j614s-all.dts").read(); m=re.search(r"mailbox@514608000\\s*\\{(.*?)\\n\\s*\\};", t, re.S); assert m, "missing J614s MTP mailbox node"; irqs=[int(x) for x in re.findall(r"<0x0\\s+(\\d+)\\s+0x4>", m.group(1))]; assert irqs[:4] == [793,792,795,794], irqs[:4]'
 
       - name: Build RAM-only initramfs
         run: |
