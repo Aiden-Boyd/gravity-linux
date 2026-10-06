@@ -1,4 +1,4 @@
-name: J614s RAM Boot Artifact
+name: J614s RAM Boot Artifacts
 
 on:
   push:
@@ -12,7 +12,17 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      matrix:
+        profile:
+          - safe
+          - diagnostic
+          - yolo
+
+    env:
+      PROFILE: ${{ matrix.profile }}
 
     steps:
       - uses: actions/checkout@v4
@@ -21,81 +31,168 @@ jobs:
 
       - name: Install build dependencies
         run: |
+          sudo dpkg --add-architecture arm64
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             bc bison build-essential clang cpio device-tree-compiler flex \
-            gcc-aarch64-linux-gnu libc6-dev-arm64-cross \
+            gcc-aarch64-linux-gnu kmod libc6-dev-arm64-cross \
             libelf-dev libssl-dev lld llvm make
 
-      - name: Configure conservative J614s kernel
+          # Diagnostic/Yolo initramfs uses Ubuntu's static ARM64 BusyBox.
+          if [ "$PROFILE" != safe ]; then
+            apt-get download busybox-static:arm64
+            mkdir -p /tmp/busybox-arm64
+            dpkg-deb -x busybox-static_*_arm64.deb /tmp/busybox-arm64
+            test -x /tmp/busybox-arm64/bin/busybox
+            readelf -h /tmp/busybox-arm64/bin/busybox | grep -q 'Machine:.*AArch64'
+          fi
+
+      - name: Configure J614s kernel profile
         run: |
           make ARCH=arm64 LLVM=1 defconfig
-
-          scripts/config --disable CONFIG_ARM64_4K_PAGES
-          scripts/config --enable CONFIG_ARM64_16K_PAGES
-
-          scripts/config --enable CONFIG_BLK_DEV_INITRD
-          scripts/config --enable CONFIG_DEVTMPFS
-          scripts/config --enable CONFIG_DEVTMPFS_MOUNT
-          scripts/config --enable CONFIG_SERIAL_SAMSUNG
-          scripts/config --enable CONFIG_SERIAL_SAMSUNG_CONSOLE
-
-          # Keep first physical boot intentionally narrow.
-          scripts/config --disable CONFIG_NVME_APPLE
-          scripts/config --disable CONFIG_BLK_DEV_NVME
-          scripts/config --disable CONFIG_PCIE_APPLE
-          scripts/config --disable CONFIG_MFD_MACSMC
-          scripts/config --disable CONFIG_WLAN
-          scripts/config --disable CONFIG_BT
-          scripts/config --disable CONFIG_MMC
-          scripts/config --disable CONFIG_USB
-
+          sh tools/j614s/ramboot-config.sh "$PROFILE"
           make ARCH=arm64 LLVM=1 olddefconfig
 
           grep -qx 'CONFIG_ARM64_16K_PAGES=y' .config
           grep -qx 'CONFIG_SERIAL_SAMSUNG=y' .config
           grep -qx 'CONFIG_SERIAL_SAMSUNG_CONSOLE=y' .config
-          grep -qx '# CONFIG_NVME_APPLE is not set' .config
-          grep -qx '# CONFIG_PCIE_APPLE is not set' .config
-          grep -qx '# CONFIG_MFD_MACSMC is not set' .config
 
-      - name: Build kernel and base J614s DTB
+          case "$PROFILE" in
+            safe)
+              grep -qx '# CONFIG_NVME_APPLE is not set' .config
+              grep -qx '# CONFIG_PCIE_APPLE is not set' .config
+              grep -qx '# CONFIG_APPLE_DART is not set' .config
+              grep -qx '# CONFIG_MFD_MACSMC is not set' .config
+              grep -qx '# CONFIG_HID_DOCKCHANNEL is not set' .config
+              ;;
+            diagnostic)
+              grep -qx 'CONFIG_APPLE_DART=m' .config
+              grep -qx 'CONFIG_PCIE_APPLE=m' .config
+              grep -qx 'CONFIG_MFD_MACSMC=m' .config
+              grep -qx 'CONFIG_HID_DOCKCHANNEL=m' .config
+              grep -qx 'CONFIG_BRCMFMAC=m' .config
+              grep -qx 'CONFIG_MMC_SDHCI_PCI=m' .config
+              ;;
+            yolo)
+              grep -qx 'CONFIG_APPLE_DART=y' .config
+              grep -qx 'CONFIG_PCIE_APPLE=y' .config
+              grep -qx 'CONFIG_MFD_MACSMC=y' .config
+              grep -qx 'CONFIG_HID_DOCKCHANNEL=y' .config
+              grep -qx 'CONFIG_BRCMFMAC=y' .config
+              grep -qx 'CONFIG_MMC_SDHCI_PCI=y' .config
+              ;;
+          esac
+
+      - name: Build kernel DTBs and modules
         run: |
-          make -j"$(nproc)" ARCH=arm64 LLVM=1 Image apple/t6040-j614s.dtb
+          make -j"$(nproc)" ARCH=arm64 LLVM=1 \
+            Image modules \
+            apple/t6040-j614s.dtb \
+            apple/t6040-j614s-all.dtb
+
           gzip -n -9 -c arch/arm64/boot/Image > Image.gz
 
-      - name: Build static RAM-only initramfs
+          test -s arch/arm64/boot/dts/apple/t6040-j614s.dtb
+          test -s arch/arm64/boot/dts/apple/t6040-j614s-all.dtb
+
+      - name: Build RAM-only initramfs
         run: |
           rm -rf ramroot
-          mkdir -p ramroot/{proc,sys,dev}
-          aarch64-linux-gnu-gcc -static -Os -s \
-            tools/j614s/ramboot-init.c -o ramroot/init
+          mkdir -p ramroot/{proc,sys,dev,etc,bin,sbin,run,tmp}
+
+          if [ "$PROFILE" = safe ]; then
+            aarch64-linux-gnu-gcc -static -Os -s \
+              tools/j614s/ramboot-init.c -o ramroot/init
+            file ramroot/init
+            readelf -h ramroot/init | grep -q 'Machine:.*AArch64'
+          else
+            cp /tmp/busybox-arm64/bin/busybox ramroot/bin/busybox
+            chmod 0755 ramroot/bin/busybox
+            cp tools/j614s/ramboot-shell-init.sh ramroot/init
+            chmod 0755 ramroot/init
+            printf '%s\n' "$PROFILE" > ramroot/etc/j614s-profile
+
+            KREL="$(make -s ARCH=arm64 LLVM=1 kernelrelease)"
+            make ARCH=arm64 LLVM=1 \
+              INSTALL_MOD_PATH="$PWD/ramroot" \
+              INSTALL_MOD_STRIP=1 \
+              modules_install
+            rm -f "ramroot/lib/modules/$KREL/build" \
+                  "ramroot/lib/modules/$KREL/source"
+            depmod -b ramroot "$KREL"
+
+            # The init script uses the static BusyBox as its interpreter.
+            readelf -h ramroot/bin/busybox | grep -q 'Machine:.*AArch64'
+
+            find "ramroot/lib/modules/$KREL" -type f \
+              \( -name '*.ko' -o -name '*.ko.xz' -o -name '*.ko.zst' \) \
+              | sort > /tmp/modules.txt
+            test -s /tmp/modules.txt
+          fi
 
           (
             cd ramroot
-            find . -print0 | cpio --null -o --format=newc
-          ) | gzip -n -9 > initramfs-j614s-ramboot.cpio.gz
-
-          file ramroot/init
-          readelf -h ramroot/init | grep -q 'Machine:.*AArch64'
+            find . -print0 | sort -z | cpio --null -o --format=newc
+          ) | gzip -n -9 > "initramfs-j614s-$PROFILE.cpio.gz"
 
       - name: Stage boot bundle
         run: |
-          mkdir -p j614s-ramboot
-          cp Image.gz j614s-ramboot/
-          cp arch/arm64/boot/dts/apple/t6040-j614s.dtb j614s-ramboot/
-          cp initramfs-j614s-ramboot.cpio.gz j614s-ramboot/
-          cp .config j614s-ramboot/kernel.config
+          OUT="j614s-ramboot-$PROFILE"
+          mkdir -p "$OUT"
 
-          cat > j614s-ramboot/BOOTARGS.txt <<'EOF'
-          earlycon=apple,s5l-uart console=ttySAC0,1500000 keep_bootcon ignore_loglevel loglevel=8 rdinit=/init panic=-1 nr_cpus=1 maxcpus=1 idle=nop
+          cp Image.gz "$OUT/"
+          cp "initramfs-j614s-$PROFILE.cpio.gz" "$OUT/initramfs.cpio.gz"
+          cp .config "$OUT/kernel.config"
+          cp tools/j614s/RAMBOOT_LOAD_ORDER.txt "$OUT/LOAD_ORDER.txt"
+          printf '%s\n' "$PROFILE" > "$OUT/PROFILE.txt"
+
+          if [ "$PROFILE" = safe ]; then
+            cp arch/arm64/boot/dts/apple/t6040-j614s.dtb "$OUT/t6040-j614s.dtb"
+            cat > "$OUT/BOOTARGS.txt" <<'EOF'
+          earlycon=apple,s5l-uart console=ttySAC0,1500000 keep_bootcon ignore_loglevel loglevel=8 rdinit=/init panic=-1 nr_cpus=1 maxcpus=1
+          EOF
+          elif [ "$PROFILE" = diagnostic ]; then
+            cp arch/arm64/boot/dts/apple/t6040-j614s-all.dtb "$OUT/t6040-j614s.dtb"
+            cat > "$OUT/BOOTARGS.txt" <<'EOF'
+          earlycon=apple,s5l-uart console=ttySAC0,1500000 keep_bootcon ignore_loglevel loglevel=8 rdinit=/init panic=-1 nr_cpus=1 maxcpus=1
+          EOF
+          else
+            cp arch/arm64/boot/dts/apple/t6040-j614s-all.dtb "$OUT/t6040-j614s.dtb"
+            cat > "$OUT/BOOTARGS.txt" <<'EOF'
+          earlycon=apple,s5l-uart console=ttySAC0,1500000 keep_bootcon ignore_loglevel loglevel=8 rdinit=/init panic=-1
+          EOF
+          fi
+
+          cat > "$OUT/README.txt" <<EOF
+          J614s RAM boot profile: $PROFILE
+
+          SAFE:
+            Minimal single-CPU UART/initramfs baseline. PCIe, DART, SMC,
+            DockChannel HID, Wi-Fi, MMC, USB and NVMe are disabled.
+
+          DIAGNOSTIC:
+            Single CPU. Reviewed J614s SMC, MTP/input, PCIe port 0 Wi-Fi/BT
+            and PCIe port 1 GL9755 SD nodes are enabled in the DTB, but their
+            drivers are modules in the RAM initramfs. Load them manually using
+            LOAD_ORDER.txt and inspect dmesg after every step.
+
+          YOLO:
+            Reviewed J614s SMC, MTP/input, PCIe/Wi-Fi/SD nodes are enabled and
+            available drivers are built in, so they probe automatically. CPU
+            count is not artificially restricted. No persistent filesystem is
+            mounted by the initramfs.
+
+          Current limitation:
+            This tree still has no reviewed J614s/T6040 NVMe, USB, DCP/GPU or
+            audio hardware nodes. Their available drivers may be compiled, but
+            this bundle does not invent unverified MMIO/IRQ descriptions.
           EOF
 
-          sha256sum j614s-ramboot/* > j614s-ramboot/SHA256SUMS
+          sha256sum "$OUT"/* > "$OUT/SHA256SUMS"
 
       - name: Upload RAM boot bundle
         uses: actions/upload-artifact@v4
         with:
-          name: j614s-ramboot-v1
-          path: j614s-ramboot/
+          name: j614s-ramboot-${{ matrix.profile }}
+          path: j614s-ramboot-${{ matrix.profile }}/
           if-no-files-found: error
