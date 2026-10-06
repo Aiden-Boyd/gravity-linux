@@ -266,10 +266,11 @@ def main() -> int:
                 "J614s bless2 does not advertise SupportsExternalPrebootObjects"
             )
 
-        print(
-            "PROBE PASS: J614s identity, paired-Recovery strategy, and "
-            "stub input plan are compatible."
-        )
+        if not args.json:
+            print(
+                "PROBE PASS: J614s identity, paired-Recovery strategy, and "
+                "stub input plan are compatible."
+            )
         return 0
     except Exception as exc:
         print(f"PROBE FAIL: {exc}", file=sys.stderr)
