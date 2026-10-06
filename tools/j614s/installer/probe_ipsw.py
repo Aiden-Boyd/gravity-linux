@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import nullcontext, redirect_stdout
 import json
 import os
 import plistlib
@@ -178,26 +179,33 @@ def main() -> int:
     owner = None
     zf = None
     try:
-        owner, zf = open_zip(args.source)
-
-        manifest = read_plist(zf, "BuildManifest.plist")
-        bootcaches = read_plist(zf, "usr/standalone/bootcaches.plist")
-        sysver = read_plist(zf, "SystemVersion.plist")
-
-        identity = select_identity(
-            manifest,
-            board_id=args.board_id,
-            chip_id=args.chip_id,
-            device_class=args.device_class,
+        # Asahi's URLCache prints its range-download spinner to stdout. Keep
+        # --json stdout strictly machine-readable by sending that progress to
+        # stderr while the remote ZIP metadata/plists are being read.
+        progress_context = (
+            redirect_stdout(sys.stderr) if args.json else nullcontext()
         )
-        info = identity["Info"]
+        with progress_context:
+            owner, zf = open_zip(args.source)
 
-        bless2 = bootcaches.get("bless2")
-        if not isinstance(bless2, dict):
-            raise RuntimeError("bootcaches.plist has no bless2 dictionary")
+            manifest = read_plist(zf, "BuildManifest.plist")
+            bootcaches = read_plist(zf, "usr/standalone/bootcaches.plist")
+            sysver = read_plist(zf, "SystemVersion.plist")
 
-        strategy, restore_path = restore_strategy(bless2)
-        inputs = check_stub_inputs(zf, identity)
+            identity = select_identity(
+                manifest,
+                board_id=args.board_id,
+                chip_id=args.chip_id,
+                device_class=args.device_class,
+            )
+            info = identity["Info"]
+
+            bless2 = bootcaches.get("bless2")
+            if not isinstance(bless2, dict):
+                raise RuntimeError("bootcaches.plist has no bless2 dictionary")
+
+            strategy, restore_path = restore_strategy(bless2)
+            inputs = check_stub_inputs(zf, identity)
 
         result = {
             "product_version": sysver.get("ProductVersion"),
