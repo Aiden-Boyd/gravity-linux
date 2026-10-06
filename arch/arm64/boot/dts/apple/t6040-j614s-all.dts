@@ -1,0 +1,109 @@
+// SPDX-License-Identifier: GPL-2.0+ OR MIT
+/*
+ * Apple MacBook Pro (14-inch, M4 Pro, 2024) J614s full diagnostic bring-up
+ *
+ * This deliberately enables every J614s endpoint path that has been measured
+ * and reviewed in this tree. The FULL-DIAGNOSTIC profile builds the drivers as
+ * modules so the nodes remain inert until userspace loads them. The YOLO
+ * profile builds the same drivers in so they probe automatically.
+ *
+ * No NVMe, USB, DCP/GPU or audio nodes are invented here: those blocks do not
+ * yet have reviewed J614s/T6040 descriptions in this tree.
+ */
+
+/dts-v1/;
+
+#include "t6040-j614s.dts"
+
+/ {
+	model = "Apple MacBook Pro (14-inch, M4 Pro, 2024) J614s [full diagnostic]";
+
+	aliases {
+		mmc0 = &sdhci0;
+		wifi0 = &wifi0;
+		bluetooth0 = &bluetooth0;
+	};
+};
+
+/* SMC is required for the measured WLAN and SD endpoint power GPIOs. */
+&smc_mbox {
+	status = "okay";
+};
+
+&smc {
+	status = "okay";
+};
+
+/* Internal keyboard/trackpad path. */
+&mtp_mbox {
+	status = "okay";
+};
+
+&mtp_dart {
+	status = "okay";
+};
+
+&mtp_dockchannel {
+	status = "okay";
+};
+
+&mtp_hid {
+	status = "okay";
+};
+
+/* Internal PCIe fabric: only the two hardware-measured populated ports. */
+&pinctrl_ap {
+	status = "okay";
+};
+
+&pcie0_dart_0 {
+	status = "okay";
+};
+
+&pcie0_dart_1 {
+	status = "okay";
+};
+
+&pcie0 {
+	iommu-map = <0x100 &pcie0_dart_0 1 1>,
+		    <0x200 &pcie0_dart_1 1 1>;
+	status = "okay";
+};
+
+/* BCM4388 Wi-Fi / Bluetooth module. */
+&port00 {
+	pwren-gpios = <&smc_gpio 0x13 GPIO_ACTIVE_HIGH>;
+	max-link-speed = <2>;
+	bus-range = <1 1>;
+	status = "okay";
+
+	wifi0: wifi@0,0 {
+		compatible = "pci14e4,4434";
+		reg = <0x10000 0x0 0x0 0x0 0x0>;
+		local-mac-address = [00 00 00 00 00 00];
+		apple,antenna-sku = "X3";
+		brcm,board-type = "apple,mriya";
+	};
+
+	bluetooth0: bluetooth@0,1 {
+		compatible = "pci14e4,5f72";
+		reg = <0x10100 0x0 0x0 0x0 0x0>;
+		local-bd-address = [00 00 00 00 00 00];
+		brcm,board-type = "apple,mriya";
+	};
+};
+
+/* Genesys Logic GL9755 SD-card reader. */
+&port01 {
+	pwren-gpios = <&smc_gpio 0x19 GPIO_ACTIVE_HIGH>;
+	max-link-speed = <1>;
+	bus-range = <2 2>;
+	status = "okay";
+
+	sdhci0: mmc@0,0 {
+		compatible = "pci17a0,9755";
+		reg = <0x20000 0x0 0x0 0x0 0x0>;
+		cd-inverted;
+		wp-inverted;
+	};
+};
