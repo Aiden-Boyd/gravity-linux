@@ -1,0 +1,49 @@
+J614s FULL-DIAGNOSTIC manual probe order
+================================================
+
+The diagnostic DT enables only hardware paths already measured/reviewed for
+J614s. Drivers are modules so the nodes do not bind until you load them.
+
+Start by checking the baseline:
+  dmesg
+  ls /sys/bus/platform/devices
+  ls /sys/bus/pci/devices
+  ls /sys/block
+
+Then load in dependency order, checking dmesg after EVERY command:
+
+  modprobe pinctrl-apple-gpio
+  modprobe apple-mailbox
+  modprobe apple-rtkit
+  modprobe macsmc
+
+  modprobe apple-dart
+
+Internal keyboard/trackpad:
+  modprobe apple-dockchannel
+  modprobe dockchannel-hid
+
+Internal PCIe fabric (ports 0/1 only):
+  modprobe pcie-apple
+
+After PCIe enumeration:
+  lspci 2>/dev/null || ls /sys/bus/pci/devices
+
+SD reader:
+  modprobe sdhci-pci
+
+Wi-Fi:
+  modprobe brcmfmac
+  # Firmware blobs are intentionally NOT bundled. A firmware request failure
+  # is still useful evidence that PCIe + brcmfmac reached the device.
+
+Compiled for future nodes / probing, but the current reviewed J614s DT does
+not describe the hardware block yet:
+  modprobe apple-sart
+  modprobe nvme-apple
+  modprobe spi-apple
+  modprobe snd-soc-apple-mca
+  modprobe snd-soc-apple-macaudio
+  modprobe xhci-hcd
+
+Do not mount internal APFS/NVMe filesystems read-write during bring-up.
