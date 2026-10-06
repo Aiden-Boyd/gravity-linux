@@ -35,6 +35,10 @@
 };
 
 /* Internal keyboard/trackpad path. */
+&mtp {
+	status = "okay";
+};
+
 &mtp_mbox {
 	status = "okay";
 };
