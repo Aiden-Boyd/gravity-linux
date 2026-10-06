@@ -127,6 +127,14 @@ jobs:
           test -s arch/arm64/boot/dts/apple/t6040-j614s.dtb
           test -s arch/arm64/boot/dts/apple/t6040-j614s-all.dtb
 
+          # The J614s keyboard/trackpad path requires the generic DockChannel
+          # binding plus an RTKit helper phandle. Keep CI from accepting a DT
+          # that compiles but can never bind to dockchannel-hid.
+          dtc -q -I dtb -O dts arch/arm64/boot/dts/apple/t6040-j614s-all.dtb > /tmp/j614s-all.dts
+          grep -q 'apple,dockchannel-hid' /tmp/j614s-all.dts
+          grep -q 'apple,helper-cpu' /tmp/j614s-all.dts
+          grep -q 'apple,rtk-helper-asc4' /tmp/j614s-all.dts
+
       - name: Build RAM-only initramfs
         run: |
           rm -rf ramroot
