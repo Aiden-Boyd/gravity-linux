@@ -149,8 +149,23 @@ jobs:
         env:
           PYTHONPATH: /tmp/asahi/src
         run: |
-          python3 tools/j614s/installer/probe_ipsw.py \
+          set +e
+          python3 tools/j614s/installer/probe_ipsw.py --dump-bless2 \
             https://updates.cdn-apple.com/2024FallFCS/fullrestores/072-12302/3786987A-AD94-4BFB-81B8-56D3841CA81B/UniversalMac_15.1_24B2083_Restore.ipsw
+          rc=$?
+          set -e
+          test "$rc" -eq 2
+
+      - name: Dump J614s macOS 26.5.2 bless2 metadata
+        env:
+          PYTHONPATH: /tmp/asahi/src
+        run: |
+          set +e
+          python3 tools/j614s/installer/probe_ipsw.py --dump-bless2 \
+            https://updates.cdn-apple.com/2026SpringFCS/fullrestores/140-24263/B95838F0-6815-4F0B-A039-156526C081AD/UniversalMac_26.5.2_25F84_Restore.ipsw
+          rc=$?
+          set -e
+          test "$rc" -eq 2
 
       - name: Verify tethered-only profile
         run: |
