@@ -8,6 +8,9 @@ on:
     paths:
       - .github/workflows/j614s-m1n1-stage1.yml
 
+permissions:
+  contents: write
+
 jobs:
   build-stage1:
     runs-on: ubuntu-latest
@@ -47,3 +50,30 @@ jobs:
             m1n1/build/build_cfg.h
             m1n1-stage1-v1.9.9.sha256
           if-no-files-found: error
+
+      - name: Checkout Gravity branch for pinning
+        uses: actions/checkout@v4
+        with:
+          path: gravity
+          ref: j614s-first-boot-v1
+          fetch-depth: 1
+
+      - name: Commit verified stage1 binary
+        run: |
+          mkdir -p gravity/tools/j614s/m1n1
+          cp m1n1/build/m1n1.bin gravity/tools/j614s/m1n1/m1n1-v1.9.9-chainloading.bin
+          cp m1n1-stage1-v1.9.9.sha256 gravity/tools/j614s/m1n1/m1n1-v1.9.9-chainloading.sha256
+
+          cd gravity
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add tools/j614s/m1n1/m1n1-v1.9.9-chainloading.bin \
+                  tools/j614s/m1n1/m1n1-v1.9.9-chainloading.sha256
+
+          if git diff --cached --quiet; then
+            echo "Pinned stage1 already matches this exact build."
+            exit 0
+          fi
+
+          git commit -m "tools: j614s: pin m1n1 v1.9.9 chainloading stage1"
+          git push origin HEAD:j614s-first-boot-v1
