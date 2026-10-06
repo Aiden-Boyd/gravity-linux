@@ -84,3 +84,25 @@ than every experiment ticket. It is a bring-up ledger, not a support promise.
   `0faa926b4f5bd3079869c7ba5ac24602c719e90b` and verifies SHA-256
   `50f15c53ee21da7083ae624e4fde49711d8dbdadbd472c7fcb6d1436965971f3`,
   rather than placing the upstream stage2 release in the stage1 slot.
+
+
+## M4 Pro stage-1 hardening candidate
+
+The next reproducible m1n1 stage-1 candidate is built from upstream v1.9.9
+commit `809541515659bf4e504807fd72bc0a539be5eee7` plus only the exact-model
+J614s/T6040 fixes adapted from Project Wallace:
+
+- force M4 secondaries into WFE before their first parking loop and refuse a
+  later fallback to state-losing WFI;
+- on T6040 initialize only the required `dart-mtp` DAPF and skip AOP/PMP/ISP
+  filters which produced asynchronous L2C access-fault SErrors;
+- leave a 16 KiB guard page above the m1n1 stage-2 log ring;
+- support the T6041 MCC layout used by T6040 with one cache plane per AMCC and
+  the hardware-verified 0x00010101 cache-status pattern;
+- enable only the conservative T6040 cpufreq path around CLUSTER_PSTATE, never
+  the T6030 throttle offsets which fault on T6040 P-clusters.
+
+The Linux PMGR driver also preserves firmware-active T6041 raw-boot domains
+and suppresses AUTO_ENABLE on `dispext0_cpu` and `dispext1_cpu`.
+The installer pin is intentionally unchanged until CI produces and reproduces
+the new exact stage-1 binary.

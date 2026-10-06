@@ -48,6 +48,7 @@ struct apple_pmgr_ps {
 	bool force_disable;
 	bool force_reset;
 	bool externally_clocked;
+	bool skip_auto_enable;
 };
 
 #define genpd_to_apple_pmgr_ps(_genpd) container_of(_genpd, struct apple_pmgr_ps, genpd)
@@ -117,7 +118,7 @@ static int apple_pmgr_ps_set(struct generic_pm_domain *genpd, u32 pstate, bool a
 		dev_err(ps->dev, "PS %s: Failed to reach power state 0x%x (now: 0x%x)\n",
 			genpd->name, pstate, reg);
 
-	if (auto_enable) {
+	if (auto_enable && !ps->skip_auto_enable) {
 		/* Not all devices implement this; this is a no-op where not implemented. */
 		reg |= APPLE_PMGR_AUTO_ENABLE;
 		regmap_write(ps->regmap, ps->offset, reg);
@@ -255,6 +256,10 @@ static int apple_pmgr_ps_probe(struct platform_device *pdev)
 		return ret;
 	}
 
+	ps->skip_auto_enable =
+		of_device_is_compatible(node, "apple,t6041-pmgr-pwrstate") &&
+		(!strcmp(name, "dispext0_cpu") || !strcmp(name, "dispext1_cpu"));
+
 	ret = of_property_read_u32(node, "reg", &ps->offset);
 	if (ret < 0) {
 		dev_err(dev, "missing reg property\n");
@@ -281,6 +286,9 @@ static int apple_pmgr_ps_probe(struct platform_device *pdev)
 		ps->externally_clocked = true;
 
 	active = apple_pmgr_ps_is_active(ps);
+	if (active && of_device_is_compatible(node, "apple,t6041-pmgr-pwrstate"))
+		ps->genpd.flags |= GENPD_FLAG_ALWAYS_ON;
+
 	if (of_property_read_bool(node, "apple,always-on")) {
 		ps->genpd.flags |= GENPD_FLAG_ALWAYS_ON;
 		if (!active) {
@@ -292,8 +300,9 @@ static int apple_pmgr_ps_probe(struct platform_device *pdev)
 		ps->genpd.flags |= GENPD_FLAG_DEFER_OFF | GENPD_FLAG_ACTIVE_WAKEUP;
 	}
 
-	/* Turn on auto-PM if the domain is already on */
-	if (active)
+	/* T6041 raw boot leaves some firmware-owned domains active and two
+	 * display CPU domains reject generic AUTO_ENABLE writes. */
+	if (active && !ps->skip_auto_enable)
 		regmap_update_bits(regmap, ps->offset, APPLE_PMGR_FLAGS | APPLE_PMGR_AUTO_ENABLE,
 				   APPLE_PMGR_AUTO_ENABLE);
 
@@ -354,6 +363,7 @@ err_remove:
 }
 
 static const struct of_device_id apple_pmgr_ps_of_match[] = {
+	{ .compatible = "apple,t6041-pmgr-pwrstate" },
 	{ .compatible = "apple,t8103-pmgr-pwrstate" },
 	{ .compatible = "apple,pmgr-pwrstate" },
 	{}

@@ -15,6 +15,63 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  m1n1-stage1-j614s:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Checkout exact m1n1 v1.9.9 source
+        uses: actions/checkout@v4
+        with:
+          repository: AsahiLinux/m1n1
+          ref: 809541515659bf4e504807fd72bc0a539be5eee7
+          submodules: recursive
+          path: m1n1
+
+      - name: Install deterministic m1n1 toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gcc-aarch64-linux-gnu
+          rustup toolchain install 1.98.1 --profile minimal
+          rustup +1.98.1 target add aarch64-unknown-none-softfloat
+
+      - name: Apply reviewed J614s patch set
+        run: |
+          python3 tools/j614s/m1n1/patch-v1.9.9-j614s.py m1n1
+          grep -q 'broken_wfi = true' m1n1/src/chickens.c
+          grep -q 'dapf_skip_entry' m1n1/src/dapf.c
+          grep -q 'LOGBUF_TOP_GUARD_SIZE' m1n1/src/kboot.c
+          grep -q 'mcc,t6041' m1n1/src/mcc.c
+          grep -q 't6040_features' m1n1/src/cpufreq.c
+          git -C m1n1 diff --check
+          git -C m1n1 diff > m1n1-j614s-v1.9.9.diff
+
+      - name: Build stage1 twice reproducibly
+        env:
+          RUSTUP_TOOLCHAIN: 1.98.1
+        run: |
+          make -C m1n1 ARCH=aarch64-linux-gnu- RELEASE=1 CHAINLOADING=1 -j2
+          cp m1n1/build/m1n1.bin /tmp/m1n1-first.bin
+          sha256sum /tmp/m1n1-first.bin
+          make -C m1n1 clean
+          make -C m1n1 ARCH=aarch64-linux-gnu- RELEASE=1 CHAINLOADING=1 -j2
+          cmp /tmp/m1n1-first.bin m1n1/build/m1n1.bin
+          sha256sum m1n1/build/m1n1.bin | tee m1n1-j614s-v1.9.9.sha256
+          strings m1n1/build/m1n1.bin | grep -Fq 'chosen.asahi,m1n1-stage1-version=v1.9.9'
+
+      - name: Upload patched stage1 candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: m1n1-stage1-v1.9.9-j614s
+          path: |
+            m1n1/build/m1n1.bin
+            m1n1-j614s-v1.9.9.sha256
+            m1n1-j614s-v1.9.9.diff
+          if-no-files-found: error
+
   build:
     runs-on: ubuntu-24.04
     timeout-minutes: 75
@@ -51,6 +108,8 @@ jobs:
           grep -q 'Packet too short for sub header' drivers/hid/dockchannel-hid/dockchannel-hid.c
           grep -q 'ACK too short for sub header' drivers/hid/dockchannel-hid/dockchannel-hid.c
           grep -q 'platform_set_drvdata' drivers/hid/dockchannel-hid/dockchannel-hid.c
+          grep -q 'apple,t6041-pmgr-pwrstate' drivers/pmdomain/apple/pmgr-pwrstate.c
+          grep -q 'skip_auto_enable' drivers/pmdomain/apple/pmgr-pwrstate.c
 
           # Verify the immutable, reproducibly built chainloading stage-1
           # consumed by the installer. Never substitute the upstream stage2 ZIP.
