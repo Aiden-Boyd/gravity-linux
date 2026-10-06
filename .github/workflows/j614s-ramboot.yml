@@ -181,17 +181,17 @@ jobs:
           if [ "$PROFILE" = safe ]; then
             cp arch/arm64/boot/dts/apple/t6040-j614s.dtb "$OUT/t6040-j614s.dtb"
             cat > "$OUT/BOOTARGS.txt" <<'EOF'
-          earlycon=apple,s5l-uart console=ttySAC0,1500000 keep_bootcon ignore_loglevel loglevel=8 rdinit=/init panic=-1 nr_cpus=1 maxcpus=1
+          earlycon=apple,s5l-uart console=ttySAC0,1500000 keep_bootcon ignore_loglevel loglevel=8 rdinit=/init panic=0 nr_cpus=1 maxcpus=1
           EOF
           elif [ "$PROFILE" = diagnostic ]; then
             cp arch/arm64/boot/dts/apple/t6040-j614s-all.dtb "$OUT/t6040-j614s.dtb"
             cat > "$OUT/BOOTARGS.txt" <<'EOF'
-          earlycon=apple,s5l-uart console=ttySAC0,1500000 keep_bootcon ignore_loglevel loglevel=8 rdinit=/init panic=-1 nr_cpus=1 maxcpus=1
+          earlycon=apple,s5l-uart console=ttySAC0,1500000 keep_bootcon ignore_loglevel loglevel=8 rdinit=/init panic=0 nr_cpus=1 maxcpus=1
           EOF
           else
             cp arch/arm64/boot/dts/apple/t6040-j614s-all.dtb "$OUT/t6040-j614s.dtb"
             cat > "$OUT/BOOTARGS.txt" <<'EOF'
-          earlycon=apple,s5l-uart console=ttySAC0,1500000 keep_bootcon ignore_loglevel loglevel=8 rdinit=/init panic=-1
+          earlycon=apple,s5l-uart console=ttySAC0,1500000 keep_bootcon ignore_loglevel loglevel=8 rdinit=/init panic=0
           EOF
           fi
 
