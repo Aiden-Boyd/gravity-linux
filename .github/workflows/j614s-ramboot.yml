@@ -61,6 +61,8 @@ jobs:
           make -C m1n1 ARCH=aarch64-linux-gnu- RELEASE=1 CHAINLOADING=1 -j2
           cmp /tmp/m1n1-first.bin m1n1/build/m1n1.bin
           sha256sum m1n1/build/m1n1.bin | tee m1n1-j614s-v1.9.9.sha256
+          test "$(wc -c < m1n1/build/m1n1.bin)" -eq 3866624
+          test "$(sha256sum m1n1/build/m1n1.bin | awk '{print $1}')" = "40e9510d539fb539f09c1b944ab3d1c23f2d7f8ed604e1c200bedf5564249499"
           strings m1n1/build/m1n1.bin | grep -Fq 'chosen.asahi,m1n1-stage1-version=v1.9.9-j614s.1'
 
       - name: Upload patched stage1 candidate
@@ -115,15 +117,16 @@ jobs:
 
           # Verify the immutable, reproducibly built chainloading stage-1
           # consumed by the installer. Never substitute the upstream stage2 ZIP.
-          PINNED_STAGE1_COMMIT=0faa926b4f5bd3079869c7ba5ac24602c719e90b
-          PINNED_STAGE1_SHA=50f15c53ee21da7083ae624e4fde49711d8dbdadbd472c7fcb6d1436965971f3
-          PINNED_STAGE1_URL="https://raw.githubusercontent.com/Aiden-Boyd/gravity-linux/$PINNED_STAGE1_COMMIT/tools/j614s/m1n1/m1n1-v1.9.9-chainloading.bin"
+          PINNED_STAGE1_COMMIT=a853472376b58b794637b43a9f34dc1ae76a7daa
+          PINNED_STAGE1_SHA=40e9510d539fb539f09c1b944ab3d1c23f2d7f8ed604e1c200bedf5564249499
+          PINNED_STAGE1_URL="https://raw.githubusercontent.com/Aiden-Boyd/gravity-linux/$PINNED_STAGE1_COMMIT/tools/j614s/m1n1/m1n1-v1.9.9-j614s-chainloading.bin"
           curl -fsSL -o /tmp/m1n1-stage1.bin "$PINNED_STAGE1_URL"
           echo "$PINNED_STAGE1_SHA  /tmp/m1n1-stage1.bin" | sha256sum -c -
           test "$(wc -c < /tmp/m1n1-stage1.bin)" -eq 3866624
-          strings /tmp/m1n1-stage1.bin | grep -Fq 'chosen.asahi,m1n1-stage1-version=v1.9.9'
+          strings /tmp/m1n1-stage1.bin | grep -Fq 'chosen.asahi,m1n1-stage1-version=v1.9.9-j614s.1'
           grep -q "M1N1_STAGE1_REPO_COMMIT=\"$PINNED_STAGE1_COMMIT\"" tools/j614s/installer/bootstrap.sh
           grep -q "M1N1_STAGE1_SHA256=\"$PINNED_STAGE1_SHA\"" tools/j614s/installer/bootstrap.sh
+          grep -q 'EXPECTED_M1N1_VERSION="v1.9.9-j614s.1"' tools/j614s/installer/bootstrap.sh
           ! grep -q 'm1n1-stage2-v1.9.9' tools/j614s/installer/bootstrap.sh
 
       - name: Install build dependencies

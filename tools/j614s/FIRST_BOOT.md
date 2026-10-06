@@ -31,15 +31,16 @@ downloads temporary files and verifies that the J614s 15.1 BaseSystem AEA path
 can actually be decrypted.
 
 The bootstrap keeps the reviewed Asahi installer logic at `v0.9.2`, but
-replaces its older **stage-1** binary with a reproducible chainloading build of
-m1n1 `v1.9.9` source commit
-`809541515659bf4e504807fd72bc0a539be5eee7`. The stage-1 was built twice
-byte-identically in CI using `RELEASE=1 CHAINLOADING=1`, GCC cross tools,
-and Rust/Cargo 1.98.1 (matching the Asahi v1.9.9 release runner).
+replaces its older **stage-1** binary with the reproducible
+`v1.9.9-j614s.1` chainloading build based on upstream m1n1 source commit
+`809541515659bf4e504807fd72bc0a539be5eee7`. The J614s build adds only the
+reviewed T6040 WFI, DAPF, log-buffer, MCC and conservative cpufreq deltas.
+It was built twice byte-identically in CI using
+`RELEASE=1 CHAINLOADING=1`, GCC cross tools, and Rust/Cargo 1.98.1.
 
 The exact binary is pinned at repository commit
-`0faa926b4f5bd3079869c7ba5ac24602c719e90b`, size 3,866,624 bytes, SHA-256
-`50f15c53ee21da7083ae624e4fde49711d8dbdadbd472c7fcb6d1436965971f3`.
+`a853472376b58b794637b43a9f34dc1ae76a7daa`, size 3,866,624 bytes, SHA-256
+`40e9510d539fb539f09c1b944ab3d1c23f2d7f8ed604e1c200bedf5564249499`.
 The installer verifies all of those properties before replacing the packaged
 stage-1. It does **not** install the upstream `m1n1-stage2-v1.9.9.zip` in the
 stage-1 slot.
@@ -78,6 +79,9 @@ git clone --depth 1 --branch v1.9.9 https://github.com/AsahiLinux/m1n1.git
 
 The host loader verifies the checkout is commit
 `809541515659bf4e504807fd72bc0a539be5eee7` before contacting the target.
+The enrolled target binary identifies as `v1.9.9-j614s.1`, while the host
+proxy tools remain the exact upstream v1.9.9 checkout; the J614s patch keeps
+the proxy feature-structure size/ABI compatible.
 
 First validate the downloaded SAFE artifact without contacting the target:
 

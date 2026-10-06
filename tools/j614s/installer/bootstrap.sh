@@ -40,14 +40,15 @@ ASAHI_INSTALLER_VERSION="v0.9.2"
 ASAHI_INSTALLER_BASE="https://cdn.asahilinux.org/installer"
 
 # Keep the reviewed Asahi installer logic, but replace its older stage-1
-# binary with our reproducible chainloading build of the exact m1n1 v1.9.9
-# source commit. The binary was built twice byte-identically in CI using
-# RELEASE=1 CHAINLOADING=1 and the Asahi v1.9.9 release runner's Rust 1.98.1.
-EXPECTED_M1N1_VERSION="v1.9.9"
+# binary with our reproducible J614s-hardened chainloading build based on the
+# exact m1n1 v1.9.9 source commit. The binary was built twice byte-identically
+# in CI using RELEASE=1 CHAINLOADING=1, Rust 1.98.1, and only the reviewed
+# T6040 WFI/DAPF/log-buffer/MCC/cpufreq deltas in tools/j614s/m1n1/.
+EXPECTED_M1N1_VERSION="v1.9.9-j614s.1"
 EXPECTED_M1N1_COMMIT="809541515659bf4e504807fd72bc0a539be5eee7"
-M1N1_STAGE1_REPO_COMMIT="0faa926b4f5bd3079869c7ba5ac24602c719e90b"
-M1N1_STAGE1_URL="https://raw.githubusercontent.com/Aiden-Boyd/gravity-linux/$M1N1_STAGE1_REPO_COMMIT/tools/j614s/m1n1/m1n1-v1.9.9-chainloading.bin"
-M1N1_STAGE1_SHA256="50f15c53ee21da7083ae624e4fde49711d8dbdadbd472c7fcb6d1436965971f3"
+M1N1_STAGE1_REPO_COMMIT="a853472376b58b794637b43a9f34dc1ae76a7daa"
+M1N1_STAGE1_URL="https://raw.githubusercontent.com/Aiden-Boyd/gravity-linux/$M1N1_STAGE1_REPO_COMMIT/tools/j614s/m1n1/m1n1-v1.9.9-j614s-chainloading.bin"
+M1N1_STAGE1_SHA256="40e9510d539fb539f09c1b944ab3d1c23f2d7f8ed604e1c200bedf5564249499"
 M1N1_STAGE1_SIZE="3866624"
 
 IPSW_TOOL_VERSION="3.1.730"

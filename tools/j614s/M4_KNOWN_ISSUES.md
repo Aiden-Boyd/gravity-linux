@@ -9,9 +9,9 @@ than every experiment ticket. It is a bring-up ledger, not a support promise.
   instructions. Current bundles require `idle=nop arm64.nowfxt`.
 - **SMP reliability:** Project Wallace reproduces a multi-core page-copy/MM
   failure on this exact model. Current Gravity J614s bundles force one CPU.
-- **m1n1 generation:** use signed m1n1 v1.9.9, commit
-  `809541515659bf4e504807fd72bc0a539be5eee7`; v1.6.1 predates important M4
-  SMP/cache, WFI/WFIT, MCC, NVMe and USB-C work.
+- **m1n1 generation:** the target stage-1 is `v1.9.9-j614s.1`, based on
+  upstream v1.9.9 commit `809541515659bf4e504807fd72bc0a539be5eee7` plus
+  only the reviewed exact-model T6040 hardening deltas.
 - **Storage isolation:** SAFE keeps NVMe, PCIe, DART, SMC, DockChannel HID,
   Wi-Fi, MMC and USB disabled and supplies no persistent root filesystem.
 
@@ -78,17 +78,16 @@ than every experiment ticket. It is a bring-up ledger, not a support promise.
 - **DockChannel module teardown:** the deliberate `BUG_ON(1)` remove callback
   has been replaced with worker draining, HID-child destruction, and workqueue
   cleanup so diagnostic module unload cannot intentionally panic the kernel.
-- **m1n1 stage1 provenance:** fixed. CI builds the exact v1.9.9 source commit
-  twice byte-identically with `RELEASE=1 CHAINLOADING=1`, GCC cross tools and
-  Rust/Cargo 1.98.1. The installer consumes immutable binary commit
-  `0faa926b4f5bd3079869c7ba5ac24602c719e90b` and verifies SHA-256
-  `50f15c53ee21da7083ae624e4fde49711d8dbdadbd472c7fcb6d1436965971f3`,
-  rather than placing the upstream stage2 release in the stage1 slot.
+- **m1n1 stage1 provenance:** fixed. CI rebuilds the J614s-hardened v1.9.9
+  source twice byte-identically with `RELEASE=1 CHAINLOADING=1`, GCC cross
+  tools and Rust/Cargo 1.98.1, then compares it to the immutable binary at
+  commit `a853472376b58b794637b43a9f34dc1ae76a7daa`. The installer verifies SHA-256
+  `40e9510d539fb539f09c1b944ab3d1c23f2d7f8ed604e1c200bedf5564249499` and never substitutes the upstream stage2 release.
 
 
-## M4 Pro stage-1 hardening candidate
+## Pinned M4 Pro stage-1 hardening
 
-The next reproducible m1n1 stage-1 candidate is built from upstream v1.9.9
+The pinned reproducible m1n1 stage-1 is built from upstream v1.9.9
 commit `809541515659bf4e504807fd72bc0a539be5eee7` plus only the exact-model
 J614s/T6040 fixes adapted from Project Wallace:
 
@@ -104,7 +103,6 @@ J614s/T6040 fixes adapted from Project Wallace:
 
 The Linux PMGR driver also preserves firmware-active T6041 raw-boot domains
 and suppresses AUTO_ENABLE on `dispext0_cpu` and `dispext1_cpu`.
-The installer pin is intentionally unchanged until CI produces and reproduces
-the new exact stage-1 binary.
+The exact stage-1 is pinned at commit `a853472376b58b794637b43a9f34dc1ae76a7daa`, SHA-256 `40e9510d539fb539f09c1b944ab3d1c23f2d7f8ed604e1c200bedf5564249499`.
 
 <!-- Patched stage-1 verification trigger: 2026-10-06 -->
