@@ -78,6 +78,11 @@ case " $BOOTARGS " in
     *" root="*) fail "RAM-only loader refuses bootargs containing root=" ;;
 esac
 
+case " $BOOTARGS " in
+    *" panic=0 "*) ;;
+    *) fail "bring-up bundle must use panic=0 so kernel panics stay visible on the console" ;;
+esac
+
 if command -v dtc >/dev/null 2>&1; then
     DT_TEXT=$(mktemp)
     trap 'rm -f "$DT_TEXT"' EXIT HUP INT TERM
