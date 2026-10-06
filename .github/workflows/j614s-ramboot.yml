@@ -85,7 +85,7 @@ jobs:
           grep -qx 'CONFIG_SERIAL_SAMSUNG_CONSOLE=y' .config
 
           echo "Resolved J614s profile symbols:"
-          grep -E '^CONFIG_(RFKILL|CFG80211|PINCTRL_APPLE_GPIO|APPLE_MAILBOX|APPLE_RTKIT|APPLE_RTKIT_HELPER|APPLE_DART|APPLE_SART|MFD_MACSMC|APPLE_DOCKCHANNEL|HID_DOCKCHANNEL|PCIE_APPLE|NVME_APPLE|SPI_APPLE|BRCMFMAC|BRCMFMAC_PCIE|MMC_SDHCI|MMC_SDHCI_PCI|SND_SOC_APPLE_MCA|SND_SOC_APPLE_MACAUDIO|USB_XHCI_HCD)=' .config || true
+          grep -E '^CONFIG_(RFKILL|CFG80211|PINCTRL_APPLE_GPIO|APPLE_MAILBOX|APPLE_RTKIT|APPLE_RTKIT_HELPER|APPLE_DART|APPLE_SART|MFD_MACSMC|GPIO_MACSMC|APPLE_DOCKCHANNEL|HID_DOCKCHANNEL|PCIE_APPLE|NVME_APPLE|SPI_APPLE|BRCMFMAC|BRCMFMAC_PCIE|MMC_SDHCI|MMC_SDHCI_PCI|SND_SOC_APPLE_MCA|SND_SOC_APPLE_MACAUDIO|USB_XHCI_HCD)=' .config || true
 
           case "$PROFILE" in
             safe)
@@ -99,6 +99,7 @@ jobs:
               grep -qx 'CONFIG_APPLE_DART=m' .config
               grep -qx 'CONFIG_PCIE_APPLE=m' .config
               grep -qx 'CONFIG_MFD_MACSMC=m' .config
+              grep -qx 'CONFIG_GPIO_MACSMC=m' .config
               grep -qx 'CONFIG_HID_DOCKCHANNEL=m' .config
               grep -qx 'CONFIG_BRCMFMAC=m' .config
               grep -qx 'CONFIG_MMC_SDHCI_PCI=m' .config
@@ -107,6 +108,7 @@ jobs:
               grep -qx 'CONFIG_APPLE_DART=y' .config
               grep -qx 'CONFIG_PCIE_APPLE=y' .config
               grep -qx 'CONFIG_MFD_MACSMC=y' .config
+              grep -qx 'CONFIG_GPIO_MACSMC=y' .config
               grep -qx 'CONFIG_HID_DOCKCHANNEL=y' .config
               grep -qx 'CONFIG_BRCMFMAC=y' .config
               grep -qx 'CONFIG_MMC_SDHCI_PCI=y' .config
