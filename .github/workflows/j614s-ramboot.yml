@@ -52,6 +52,7 @@ jobs:
       - name: Build stage1 twice reproducibly
         env:
           RUSTUP_TOOLCHAIN: 1.98.1
+          M1N1_VERSION_TAG: v1.9.9-j614s.1
         run: |
           make -C m1n1 ARCH=aarch64-linux-gnu- RELEASE=1 CHAINLOADING=1 -j2
           cp m1n1/build/m1n1.bin /tmp/m1n1-first.bin
@@ -60,7 +61,7 @@ jobs:
           make -C m1n1 ARCH=aarch64-linux-gnu- RELEASE=1 CHAINLOADING=1 -j2
           cmp /tmp/m1n1-first.bin m1n1/build/m1n1.bin
           sha256sum m1n1/build/m1n1.bin | tee m1n1-j614s-v1.9.9.sha256
-          strings m1n1/build/m1n1.bin | grep -Fq 'chosen.asahi,m1n1-stage1-version=v1.9.9'
+          strings m1n1/build/m1n1.bin | grep -Fq 'chosen.asahi,m1n1-stage1-version=v1.9.9-j614s.1'
 
       - name: Upload patched stage1 candidate
         uses: actions/upload-artifact@v4
