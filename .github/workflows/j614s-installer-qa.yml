@@ -98,6 +98,53 @@ jobs:
           grep -q '0x6040: "26.5.2"' /tmp/asahi-flat/main.py
           grep -q 'base_system_src.endswith(".aea")' /tmp/asahi-flat/stub.py
 
+      - name: Test read-only IPSW probe fixtures
+        run: |
+          python3 - <<'PY'
+          import plistlib, zipfile
+          from pathlib import Path
+
+          def make(path, restore_path):
+              manifest = {
+                  "BuildIdentities": [{
+                      "ApBoardID": "0x04",
+                      "ApChipID": "0x6040",
+                      "Info": {
+                          "DeviceClass": "j614sap",
+                          "RestoreBehavior": "Erase",
+                          "Variant": "macOS Customer",
+                          "BuildNumber": "25F84",
+                      },
+                      "Manifest": {
+                          "BaseSystem": {"Info": {"Path": "arm64eBaseSystem.dmg.aea"}}
+                      },
+                  }]
+              }
+              bootcaches = {"bless2": {}}
+              if restore_path is not None:
+                  bootcaches["bless2"]["RestoreBundlePath"] = restore_path
+              sysver = {"ProductVersion": "26.5.2", "ProductBuildVersion": "25F84"}
+
+              with zipfile.ZipFile(path, "w") as zf:
+                  for name, obj in [
+                      ("BuildManifest.plist", manifest),
+                      ("usr/standalone/bootcaches.plist", bootcaches),
+                      ("SystemVersion.plist", sysver),
+                  ]:
+                      zf.writestr(name, plistlib.dumps(obj))
+                  zf.writestr("arm64eBaseSystem.dmg.aea", b"fixture")
+
+          make("/tmp/probe-pass.ipsw", "./Restore")
+          make("/tmp/probe-fail.ipsw", None)
+          PY
+
+          python3 tools/j614s/installer/probe_ipsw.py /tmp/probe-pass.ipsw
+          set +e
+          python3 tools/j614s/installer/probe_ipsw.py /tmp/probe-fail.ipsw
+          rc=$?
+          set -e
+          test "$rc" -eq 2
+
       - name: Verify tethered-only profile
         run: |
           python3 - <<'PY'
