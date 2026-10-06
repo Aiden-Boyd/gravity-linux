@@ -19,26 +19,39 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: AsahiLinux/m1n1
-          ref: 809541515659bf4e504807fd72bc0a539be5eee7
+          ref: v1.9.9
           submodules: recursive
           path: m1n1
 
-      - name: Install build dependencies
+      - name: Install pinned build dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu
-          rustup target add aarch64-unknown-none-softfloat
+          rustup toolchain install 1.98.1 --profile minimal
+          rustup default 1.98.1
+          rustup target add --toolchain 1.98.1 aarch64-unknown-none-softfloat
+          rustc --version
+          cargo --version
+          rustc --version | grep -q 'rustc 1.98.1'
+          cargo --version | grep -q 'cargo 1.98.1'
 
-      - name: Build exact chainloading stage1
-        env:
-          M1N1_VERSION_TAG: v1.9.9
+      - name: Build exact chainloading stage1 twice
         run: |
           test "$(git -C m1n1 rev-parse HEAD)" = "809541515659bf4e504807fd72bc0a539be5eee7"
-          make -C m1n1 RELEASE=1 CHAINLOADING=1 -j"$(nproc)"
+
+          make -C m1n1 -k -j2 ARCH=aarch64-linux-gnu- RELEASE=1 CHAINLOADING=1
           grep -qx '#define RELEASE' m1n1/build/build_cfg.h
           grep -qx '#define CHAINLOADING' m1n1/build/build_cfg.h
           test -s m1n1/build/m1n1.bin
           strings m1n1/build/m1n1.bin | grep -q 'v1.9.9'
+          cp m1n1/build/m1n1.bin /tmp/m1n1-stage1-first.bin
+
+          make -C m1n1 clean
+          make -C m1n1 -k -j2 ARCH=aarch64-linux-gnu- RELEASE=1 CHAINLOADING=1
+          grep -qx '#define RELEASE' m1n1/build/build_cfg.h
+          grep -qx '#define CHAINLOADING' m1n1/build/build_cfg.h
+          cmp /tmp/m1n1-stage1-first.bin m1n1/build/m1n1.bin
+
           sha256sum m1n1/build/m1n1.bin | tee m1n1-stage1-v1.9.9.sha256
 
       - name: Upload exact chainloading stage1
