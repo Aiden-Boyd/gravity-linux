@@ -35,6 +35,23 @@ code.
 
 No upstream Asahi or blacktop source is vendored into this repository.
 
+## Read-only compatibility probe
+
+Before any install attempt, run:
+
+    ./tools/j614s/installer/bootstrap.sh --probe
+
+Probe mode downloads the packaged Asahi installer, verifies its embedded m1n1
+has T6040 support, and range-reads the exact J614s 26.5.2 restore IPSW. It checks
+the J614s erase identity, BaseSystem member, bootcaches metadata, and the
+RestoreBundlePath required by the current upstream stub builder.
+
+Probe mode does not require AC power and does not resize, create, mount, or
+delete APFS partitions. It does not alter boot policy or Recovery state.
+
+Normal install mode runs the same probe automatically and refuses to proceed if
+the metadata is incompatible.
+
 ## Run
 
 From normal macOS:
@@ -46,6 +63,10 @@ The installer still asks for confirmation before resizing/creating the stub.
 
 If empty manual m1n1 volumes from earlier testing still exist, remove only the
 verified-empty ones first. The bootstrap never deletes them automatically.
+
+If an earlier stage-1 attempt left a volume/container named
+`Gravity Linux J614s Dev`, normal install mode refuses to proceed. Inspect and
+clean the partial stub explicitly before retrying; probe mode remains available.
 
 After stage 1, follow the installer-provided shutdown and Startup Options /
 Recovery instructions exactly. The resulting environment is only the m1n1 proxy;
