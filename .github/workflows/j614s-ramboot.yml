@@ -10,6 +10,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: j614s-ramboot-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-24.04
@@ -117,10 +121,19 @@ jobs:
 
       - name: Build kernel DTBs and modules
         run: |
-          make -j"$(nproc)" ARCH=arm64 LLVM=1 \
-            Image modules \
-            apple/t6040-j614s.dtb \
-            apple/t6040-j614s-all.dtb
+          if [ "$PROFILE" = safe ]; then
+            # SAFE never installs or loads modules; avoid compiling the entire
+            # defconfig module set just to produce the first-boot kernel.
+            make -j"$(nproc)" ARCH=arm64 LLVM=1 \
+              Image \
+              apple/t6040-j614s.dtb \
+              apple/t6040-j614s-all.dtb
+          else
+            make -j"$(nproc)" ARCH=arm64 LLVM=1 \
+              Image modules \
+              apple/t6040-j614s.dtb \
+              apple/t6040-j614s-all.dtb
+          fi
 
           gzip -n -9 -c arch/arm64/boot/Image > Image.gz
 
