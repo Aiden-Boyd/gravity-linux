@@ -44,6 +44,10 @@ GitHub Actions builds three RAM-boot bundles:
 
 The SAFE bundle is the only intended first hardware boot.
 
+All RAM-boot profiles use `panic=0` during bring-up. A kernel panic therefore
+stays on the serial console instead of immediately rebooting the target and
+discarding the most useful failure evidence.
+
 ## Host-side loader
 
 Use a second Linux/macOS host connected to the target by USB-C and an m1n1
