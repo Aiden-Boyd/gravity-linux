@@ -53,6 +53,10 @@
 
 &mtp_hid {
 	status = "okay";
+
+	multi-touch {
+		firmware-name = "apple/tpmtfw-j614s.bin";
+	};
 };
 
 /* Internal PCIe fabric: only the two hardware-measured populated ports. */
