@@ -470,6 +470,13 @@ static int dchid_get_firmware(struct dchid_iface *iface, void **firmware, size_t
 	if (ret)
 		return ret;
 
+	if (fw->size < sizeof(*hdr)) {
+		dev_warn(iface->dchid->dev, "%s: firmware too small for header\n",
+			 fw_name);
+		ret = -EINVAL;
+		goto done;
+	}
+
 	hdr = (struct fw_header *)fw->data;
 
 	if (hdr->magic != FW_MAGIC || hdr->version != FW_VER ||
@@ -659,6 +666,9 @@ static int dchid_raw_request(struct hid_device *hdev,
 {
 	struct dchid_iface *iface = hdev->driver_data;
 
+	if (!len)
+		return -EINVAL;
+
 	switch (reqtype) {
 	case HID_REQ_GET_REPORT:
 		buf[0] = reportnum;
@@ -691,6 +701,7 @@ static void dchid_create_interface_work(struct work_struct *ws)
 	if (iface->hid) {
 		dev_warn(dchid->dev, "Interface %s already created!\n",
 			 iface->name);
+		iface->creating = false;
 		return;
 	}
 
@@ -700,14 +711,17 @@ static void dchid_create_interface_work(struct work_struct *ws)
 	ret = dchid_enable_interface(iface);
 	if (ret < 0) {
 		dev_warn(dchid->dev, "Failed to enable %s: %d\n", iface->name, ret);
+		iface->creating = false;
 		return;
 	}
 
 	iface->deferred = false;
 
 	hid = hid_allocate_device();
-	if (IS_ERR(hid))
+	if (IS_ERR(hid)) {
+		iface->creating = false;
 		return;
+	}
 
 	snprintf(hid->name, sizeof(hid->name), "Apple MTP %s", iface->name);
 	snprintf(hid->phys, sizeof(hid->phys), "%s.%d (%s)",
@@ -749,6 +763,8 @@ static void dchid_create_interface_work(struct work_struct *ws)
 		hid_destroy_device(hid);
 		dev_warn(iface->dchid->dev, "Failed to register hid device %s", iface->name);
 	}
+
+	iface->creating = false;
 }
 
 static int dchid_create_interface(struct dchid_iface *iface)
@@ -758,7 +774,12 @@ static int dchid_create_interface(struct dchid_iface *iface)
 
 	iface->creating = true;
 	INIT_WORK(&iface->create_work, dchid_create_interface_work);
-	return queue_work(iface->dchid->new_iface_wq, &iface->create_work);
+	if (!queue_work(iface->dchid->new_iface_wq, &iface->create_work)) {
+		iface->creating = false;
+		return -EBUSY;
+	}
+
+	return 0;
 }
 
 static void dchid_handle_descriptor(struct dchid_iface *iface, void *hid_desc, size_t desc_len)
@@ -836,11 +857,15 @@ static void dchid_handle_init(struct dockchannel_hid *dchid, void *data, size_t 
 	struct dchid_init_hdr *hdr = data;
 	struct dchid_iface *iface;
 	struct dchid_init_block_hdr *blk;
+	char name[sizeof(hdr->name) + 1];
 
 	if (length < sizeof(*hdr))
 		return;
 
-	iface = dchid_get_interface(dchid, hdr->iface, hdr->name);
+	memcpy(name, hdr->name, sizeof(hdr->name));
+	name[sizeof(hdr->name)] = '\0';
+
+	iface = dchid_get_interface(dchid, hdr->iface, name);
 	if (!iface)
 		return;
 
@@ -883,7 +908,10 @@ static void dchid_handle_init(struct dockchannel_hid *dchid, void *data, size_t 
 		case INIT_PRODUCT_NAME: {
 			char *product = data;
 
-			if (product[blk->length - 1] != 0) {
+			if (!blk->length) {
+				dev_warn(dchid->dev, "Empty product name for %s\n",
+					 iface->name);
+			} else if (product[blk->length - 1] != 0) {
 				dev_warn(dchid->dev, "Unterminated product name for %s\n",
 					 iface->name);
 			} else {
@@ -1014,8 +1042,17 @@ static void dchid_packet_work(struct work_struct *ws)
 	struct dchid_work *work = container_of(ws, struct dchid_work, work);
 	struct dchid_subhdr *shdr = (void *)work->data;
 	struct dockchannel_hid *dchid = work->iface->dchid;
-	int type = FIELD_GET(FLAGS_GROUP, shdr->flags);
-	u8 *payload = work->data + sizeof(*shdr);
+	int type;
+	u8 *payload;
+
+	if (work->hdr.length < sizeof(*shdr)) {
+		dev_err(dchid->dev, "Packet too short for sub header: %u\n",
+			work->hdr.length);
+		goto out;
+	}
+
+	type = FIELD_GET(FLAGS_GROUP, shdr->flags);
+	payload = work->data + sizeof(*shdr);
 
 	if (shdr->length + sizeof(*shdr) > work->hdr.length) {
 		dev_err(dchid->dev, "Bad sub header length (%hu > %zu)\n",
@@ -1042,7 +1079,15 @@ out:
 static void dchid_handle_ack(struct dchid_iface *iface, struct dchid_hdr *hdr, void *data)
 {
 	struct dchid_subhdr *shdr = (void *)data;
-	u8 *payload = data + sizeof(*shdr);
+	u8 *payload;
+
+	if (hdr->length < sizeof(*shdr)) {
+		dev_err(iface->dchid->dev, "ACK too short for sub header: %u\n",
+			hdr->length);
+		return;
+	}
+
+	payload = data + sizeof(*shdr);
 
 	if (shdr->length + sizeof(*shdr) > hdr->length) {
 		dev_err(iface->dchid->dev, "Bad sub header length (%hu > %zu)\n",
@@ -1090,7 +1135,7 @@ static void dchid_handle_packet(void *cookie, size_t avail)
 
 	if (dockchannel_recv(dchid->dc, &hdr, sizeof(hdr)) != sizeof(hdr)) {
 		dev_err(dchid->dev, "Read failed (header)\n");
-		return;
+		goto done;
 	}
 
 	if (hdr.hdr_len != sizeof(hdr)) {
@@ -1139,7 +1184,7 @@ static void dchid_handle_packet(void *cookie, size_t avail)
 
 	work = kzalloc(sizeof(*work) + hdr.length, GFP_KERNEL);
 	if (!work)
-		return;
+		goto done;
 
 	work->hdr = hdr;
 	work->iface = iface;
@@ -1171,6 +1216,7 @@ static int dockchannel_hid_probe(struct platform_device *pdev)
 	}
 
 	dchid->dev = dev;
+	platform_set_drvdata(pdev, dchid);
 
 	/*
 	 * First make sure all the GPIOs are available, in cased we need to defer.
@@ -1251,7 +1297,48 @@ static int dockchannel_hid_probe(struct platform_device *pdev)
 
 static void dockchannel_hid_remove(struct platform_device *pdev)
 {
-	BUG_ON(1);
+	struct dockchannel_hid *dchid = platform_get_drvdata(pdev);
+	int i;
+
+	if (!dchid)
+		return;
+
+	/*
+	 * No new async interface creation may race teardown. The DockChannel
+	 * transport itself is devm-owned by the platform device, so drain our
+	 * workers and unregister HID children before their backing state goes.
+	 */
+	if (dchid->new_iface_wq)
+		flush_workqueue(dchid->new_iface_wq);
+
+	for (i = 0; i < MAX_INTERFACES; i++) {
+		struct dchid_iface *iface = dchid->ifaces[i];
+
+		if (!iface)
+			continue;
+
+		if (iface->wq)
+			flush_workqueue(iface->wq);
+
+		if (iface->hid) {
+			hid_destroy_device(iface->hid);
+			iface->hid = NULL;
+		}
+	}
+
+	for (i = 0; i < MAX_INTERFACES; i++) {
+		struct dchid_iface *iface = dchid->ifaces[i];
+
+		if (iface && iface->wq) {
+			destroy_workqueue(iface->wq);
+			iface->wq = NULL;
+		}
+	}
+
+	if (dchid->new_iface_wq) {
+		destroy_workqueue(dchid->new_iface_wq);
+		dchid->new_iface_wq = NULL;
+	}
 }
 
 static const struct of_device_id dockchannel_hid_of_match[] = {

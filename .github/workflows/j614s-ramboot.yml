@@ -15,6 +15,42 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  m1n1-stage1:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout m1n1 v1.9.9
+        uses: actions/checkout@v4
+        with:
+          repository: AsahiLinux/m1n1
+          ref: 809541515659bf4e504807fd72bc0a539be5eee7
+          submodules: recursive
+          path: m1n1
+
+      - name: Install m1n1 build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu
+          rustup target add aarch64-unknown-none-softfloat
+
+      - name: Build exact chainloading stage1
+        run: |
+          make -C m1n1 RELEASE=1 CHAINLOADING=1 -j"$(nproc)"
+          grep -qx '#define RELEASE' m1n1/build/build_cfg.h
+          grep -qx '#define CHAINLOADING' m1n1/build/build_cfg.h
+          test -s m1n1/build/m1n1.bin
+          strings m1n1/build/m1n1.bin | grep -q 'v1.9.9'
+          sha256sum m1n1/build/m1n1.bin | tee m1n1-stage1-v1.9.9.sha256
+
+      - name: Upload exact chainloading stage1
+        uses: actions/upload-artifact@v4
+        with:
+          name: m1n1-stage1-v1.9.9-chainloading
+          path: |
+            m1n1/build/m1n1.bin
+            m1n1/build/build_cfg.h
+            m1n1-stage1-v1.9.9.sha256
+          if-no-files-found: error
+
   build:
     runs-on: ubuntu-24.04
     timeout-minutes: 75
@@ -47,6 +83,10 @@ jobs:
           grep -q 'PWR_REQ_V2' drivers/hid/dockchannel-hid/dockchannel-hid.c
           grep -q 'locked_el2_sysregs' drivers/irqchip/irq-apple-aic.c
           grep -q 'compatible = "apple,t6040-aic3"' drivers/irqchip/irq-apple-aic.c
+          ! grep -q 'BUG_ON(1)' drivers/hid/dockchannel-hid/dockchannel-hid.c
+          grep -q 'Packet too short for sub header' drivers/hid/dockchannel-hid/dockchannel-hid.c
+          grep -q 'ACK too short for sub header' drivers/hid/dockchannel-hid/dockchannel-hid.c
+          grep -q 'platform_set_drvdata' drivers/hid/dockchannel-hid/dockchannel-hid.c
 
           # Verify the exact signed m1n1 release artifact used by the installer.
           curl -fsSL -o /tmp/m1n1-stage2-v1.9.9.zip https://github.com/AsahiLinux/m1n1/releases/download/v1.9.9/m1n1-stage2-v1.9.9.zip

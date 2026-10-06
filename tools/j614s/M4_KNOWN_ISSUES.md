@@ -64,3 +64,20 @@ than every experiment ticket. It is a bring-up ledger, not a support promise.
 - **DockChannel HID robustness:** invalid interface indices are rejected before
   indexing, zero-length events are dropped, malformed packet work is freed,
   and `starting` is cleared on ready and timeout so a failed start can retry.
+
+## Driver hardening queue
+
+- **DockChannel receive re-arm:** header-read/allocation failures now return
+  through the common re-arm path so one transient error cannot silently stop
+  keyboard/trackpad RX.
+- **DockChannel parser bounds:** report/ACK subheaders are length-checked before
+  field access; zero-length raw HID requests and INIT product names are rejected
+  safely; fixed-width interface names are copied into a NUL-terminated buffer.
+- **DockChannel retry state:** asynchronous interface creation clears
+  `creating` on all exits and reports a failed queue operation as `-EBUSY`.
+- **DockChannel module teardown:** the deliberate `BUG_ON(1)` remove callback
+  has been replaced with worker draining, HID-child destruction, and workqueue
+  cleanup so diagnostic module unload cannot intentionally panic the kernel.
+- **m1n1 stage1 provenance:** CI builds the exact signed v1.9.9 source commit
+  with `RELEASE=1 CHAINLOADING=1`. The installer must consume the resulting
+  pinned stage1 binary, not the upstream stage2 release ZIP.
