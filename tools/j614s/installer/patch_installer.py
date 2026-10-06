@@ -5,13 +5,15 @@ Patch a stock Asahi Linux installer release for expert-only J614s/T6040
 bring-up.
 
 This intentionally changes only:
-  * T6040/J614s admission in src/main.py
-  * the macOS 26.5.2 J614s restore identity
-  * AEA BaseSystem handling in src/stub.py
+  * T6040/J614s admission in main.py
+  * the original macOS 15.1 J614s restore identity
+  * AEA BaseSystem handling in stub.py
+  * modern paired-Recovery restore-bundle placement when Apple's bless2
+    metadata omits the legacy RestoreBundlePath key
 
-Everything else (APFS layout, stub OS construction, Preboot/Recovery handling,
-authentication, Reduced Security setup, blessing, and stage-2 enrollment)
-remains the upstream Asahi installer implementation.
+Everything else (APFS layout, authentication, Reduced Security setup,
+blessing, and stage-2 enrollment) remains the upstream Asahi installer
+implementation.
 """
 
 from __future__ import annotations
@@ -21,20 +23,24 @@ from pathlib import Path
 
 
 J614S_IPSW_URL = (
-    "https://updates.cdn-apple.com/2026SpringFCS/fullrestores/140-24263/"
-    "B95838F0-6815-4F0B-A039-156526C081AD/"
-    "UniversalMac_26.5.2_25F84_Restore.ipsw"
+    "https://updates.cdn-apple.com/2024FallFCS/fullrestores/072-12302/"
+    "3786987A-AD94-4BFB-81B8-56D3841CA81B/"
+    "UniversalMac_15.1_24B2083_Restore.ipsw"
 )
 
 
-def insert_before_block_end(text: str, start_marker: str, end_marker: str, insertion: str) -> str:
+def insert_before_block_end(
+    text: str, start_marker: str, end_marker: str, insertion: str
+) -> str:
     start = text.find(start_marker)
     if start < 0:
         raise RuntimeError(f"missing start marker: {start_marker!r}")
 
     end = text.find(end_marker, start)
     if end < 0:
-        raise RuntimeError(f"missing end marker after {start_marker!r}: {end_marker!r}")
+        raise RuntimeError(
+            f"missing end marker after {start_marker!r}: {end_marker!r}"
+        )
 
     if insertion.strip() in text[start:end]:
         return text
@@ -49,18 +55,18 @@ def patch_main(path: Path) -> None:
         text,
         "CHIP_MIN_VER = {\n",
         "}\n\nDEVICES = {",
-        '    0x6040: "26.5.2",   # T6040, M4 Pro (expert-only J614s bring-up)\n',
+        '    0x6040: "15.1",     # T6040, M4 Pro (expert-only J614s bring-up)\n',
     )
 
     text = insert_before_block_end(
         text,
         "DEVICES = {\n",
         "}\n\n# Asahi Linux does not support running in a virtual machine",
-        '    "j614sap": Device("26.5.2", True), # MacBook Pro (14-inch, M4 Pro, Mac16,8)\n',
+        '    "j614sap": Device("15.1", True), # MacBook Pro (14-inch, M4 Pro, Mac16,8)\n',
     )
 
-    ipsw_entry = f'''    IPSW("26.5.2",
-         "26.5.2",
+    ipsw_entry = f'''    IPSW("15.1",
+         "15.1",
          "iBoot-0",
          "0",
          True,
@@ -90,15 +96,15 @@ def patch_stub(path: Path) -> None:
         "urlcache, zipfile, logging, json, tempfile, hashlib\n"
     )
     if import_anchor not in text and import_replacement not in text:
-        raise RuntimeError("unexpected src/stub.py import layout")
+        raise RuntimeError("unexpected stub.py import layout")
     text = text.replace(import_anchor, import_replacement, 1)
 
     method_marker = "    def install_files(self, cur_os):\n"
     if method_marker not in text:
         raise RuntimeError("missing StubInstaller.install_files marker")
 
-    method = '''    def copy_aea_compress(self, src, path):
-        """Decrypt a macOS 26 AEA-wrapped BaseSystem and store it compressed.
+    aea_method = '''    def copy_aea_compress(self, src, path):
+        """Decrypt an AEA-wrapped BaseSystem and store it compressed.
 
         The helper is deliberately external: the bootstrap downloads a pinned
         arm64 build of blacktop/ipsw, verifies its SHA-256, and passes its path
@@ -148,10 +154,83 @@ def patch_stub(path: Path) -> None:
 
 '''
 
-    if "    def copy_aea_compress(self, src, path):\n" not in text:
-        text = text.replace(method_marker, method + method_marker, 1)
+    paired_method = '''    def get_restore_bundle_relpath(self):
+        """Return the Preboot-relative restore path and whether it was explicit."""
+        bless2 = self.bootcaches.get("bless2")
+        if not isinstance(bless2, dict):
+            raise RuntimeError("bootcaches.plist has no bless2 dictionary")
 
-    old = '''        if self.is_ota:
+        relpath = bless2.get("RestoreBundlePath")
+        explicit = relpath is not None
+
+        if relpath is None:
+            if not bless2.get("SupportsPairedRecovery"):
+                raise RuntimeError(
+                    "bless2 has neither RestoreBundlePath nor SupportsPairedRecovery"
+                )
+
+            # Modern Apple Silicon bootcaches use paired Recovery and omit
+            # RestoreBundlePath. The preserved restore bundle lives at
+            # <Preboot>/<VGID>/restore.
+            relpath = "restore"
+
+        if not isinstance(relpath, str) or not relpath:
+            raise RuntimeError(f"invalid restore bundle path: {relpath!r}")
+
+        relpath = os.path.normpath(relpath)
+        if (
+            os.path.isabs(relpath)
+            or relpath in (".", "..")
+            or relpath.startswith("../")
+            or "\\x00" in relpath
+        ):
+            raise RuntimeError(f"unsafe restore bundle path: {relpath!r}")
+
+        return relpath, explicit
+
+'''
+
+    if "    def copy_aea_compress(self, src, path):\n" not in text:
+        text = text.replace(method_marker, aea_method + method_marker, 1)
+
+    if "    def get_restore_bundle_relpath(self):\n" not in text:
+        text = text.replace(method_marker, paired_method + method_marker, 1)
+
+    old_restore = '''        bless2 = self.bootcaches["bless2"]
+
+        restore_bundle = os.path.join(self.pb_vgid, bless2["RestoreBundlePath"])
+        os.makedirs(restore_bundle, exist_ok=True)
+'''
+    new_restore = '''        restore_relpath, restore_path_explicit = self.get_restore_bundle_relpath()
+
+        restore_bundle = os.path.join(self.pb_vgid, restore_relpath)
+        os.makedirs(restore_bundle, exist_ok=True)
+'''
+    if old_restore not in text and new_restore not in text:
+        raise RuntimeError("unexpected restore-bundle layout in stub.py")
+    text = text.replace(old_restore, new_restore, 1)
+
+    old_symlink = '''        # This is a workaround for some screwiness in the macOS <12.0 bootability
+        # code, which ends up putting the apticket in the wrong volume...
+        sys_restore_bundle = os.path.join(self.osi.system, bless2["RestoreBundlePath"])
+        if os.path.lexists(sys_restore_bundle):
+            os.unlink(sys_restore_bundle)
+        os.symlink(restore_bundle, sys_restore_bundle)
+'''
+    new_symlink = '''        # This symlink is an upstream workaround for legacy bootability metadata.
+        # Modern paired-Recovery metadata has no RestoreBundlePath and uses
+        # the Preboot <VGID>/restore bundle directly.
+        if restore_path_explicit:
+            sys_restore_bundle = os.path.join(self.osi.system, restore_relpath)
+            if os.path.lexists(sys_restore_bundle):
+                os.unlink(sys_restore_bundle)
+            os.symlink(restore_bundle, sys_restore_bundle)
+'''
+    if old_symlink not in text and new_symlink not in text:
+        raise RuntimeError("unexpected restore symlink layout in stub.py")
+    text = text.replace(old_symlink, new_symlink, 1)
+
+    old_base_system = '''        if self.is_ota:
             self.copy_recompress("AssetData/payloadv2/basesystem_patches/arm64eBaseSystem.dmg",
                                  os.path.join(basesystem_path, "arm64eBaseSystem.dmg"))
         else:
@@ -159,7 +238,7 @@ def patch_stub(path: Path) -> None:
                                os.path.join(basesystem_path, "arm64eBaseSystem.dmg"))
 '''
 
-    new = '''        if self.is_ota:
+    new_base_system = '''        if self.is_ota:
             self.copy_recompress("AssetData/payloadv2/basesystem_patches/arm64eBaseSystem.dmg",
                                  os.path.join(basesystem_path, "arm64eBaseSystem.dmg"))
         else:
@@ -171,9 +250,9 @@ def patch_stub(path: Path) -> None:
                 self.copy_compress(base_system_src, base_system_dst)
 '''
 
-    if old not in text and new not in text:
-        raise RuntimeError("unexpected BaseSystem extraction layout in src/stub.py")
-    text = text.replace(old, new, 1)
+    if old_base_system not in text and new_base_system not in text:
+        raise RuntimeError("unexpected BaseSystem extraction layout in stub.py")
+    text = text.replace(old_base_system, new_base_system, 1)
 
     path.write_text(text)
 
@@ -183,9 +262,9 @@ def verify(main_py: Path, stub_py: Path) -> None:
     stub = stub_py.read_text()
 
     required = [
-        '0x6040: "26.5.2"',
-        '"j614sap": Device("26.5.2", True)',
-        'IPSW("26.5.2"',
+        '0x6040: "15.1"',
+        '"j614sap": Device("15.1", True)',
+        'IPSW("15.1"',
         J614S_IPSW_URL,
     ]
     for item in required:
@@ -196,6 +275,10 @@ def verify(main_py: Path, stub_py: Path) -> None:
         "def copy_aea_compress(self, src, path):",
         'os.environ.get("IPSW_AEA_TOOL")',
         'base_system_src.endswith(".aea")',
+        "def get_restore_bundle_relpath(self):",
+        'bless2.get("SupportsPairedRecovery")',
+        'relpath = "restore"',
+        "if restore_path_explicit:",
     ):
         if item not in stub:
             raise RuntimeError(f"stub.py verification failed: missing {item!r}")
