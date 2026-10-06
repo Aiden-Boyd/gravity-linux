@@ -25,6 +25,7 @@ jobs:
           python3 -m py_compile tools/j614s/installer/probe_host.py
           python3 -m py_compile tools/j614s/installer/probe_local_layout.py
           python3 -m py_compile tools/j614s/installer/cleanup_partial.py
+          python3 -m py_compile tools/j614s/installer/probe_aes_base_system.py
           python3 -m json.tool tools/j614s/installer/installer_data.json >/dev/null
 
       - name: Test host Recovery alignment logic
