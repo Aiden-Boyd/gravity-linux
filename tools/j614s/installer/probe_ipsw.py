@@ -71,6 +71,11 @@ def main() -> int:
     parser.add_argument("--chip-id", type=lambda value: int(value, 0), default=0x6040)
     parser.add_argument("--device-class", default="j614sap")
     parser.add_argument("--json", action="store_true")
+    parser.add_argument(
+        "--dump-bless2",
+        action="store_true",
+        help="print the public IPSW bless2 dictionary as XML for bring-up analysis",
+    )
     args = parser.parse_args()
 
     owner = None
@@ -121,6 +126,10 @@ def main() -> int:
             "bless2_keys": sorted(bless2.keys()),
             "restore_bundle_path": restore_path,
         }
+
+        if args.dump_bless2:
+            print("bless2 plist:")
+            print(plistlib.dumps({"bless2": bless2}, fmt=plistlib.FMT_XML).decode())
 
         if args.json:
             print(json.dumps(result, indent=2, sort_keys=True))
