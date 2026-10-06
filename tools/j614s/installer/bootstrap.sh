@@ -5,8 +5,8 @@
 #
 # This wrapper intentionally reuses the upstream Asahi installer for APFS,
 # stub macOS, Recovery/Preboot, authentication, boot policy, blessing, and
-# stage-2 enrollment. It only adds J614s admission plus macOS 26 AEA recovery
-# handling and exposes a tethered m1n1-only install profile.
+# stage-2 enrollment. It adds J614s admission, AEA BaseSystem handling,
+# modern paired-Recovery support, and a tethered m1n1-only install profile.
 
 set -eu
 
@@ -29,7 +29,7 @@ case "${1:-}" in
         ;;
 esac
 
-J614S_IPSW_URL="https://updates.cdn-apple.com/2026SpringFCS/fullrestores/140-24263/B95838F0-6815-4F0B-A039-156526C081AD/UniversalMac_26.5.2_25F84_Restore.ipsw"
+J614S_IPSW_URL="https://updates.cdn-apple.com/2024FallFCS/fullrestores/072-12302/3786987A-AD94-4BFB-81B8-56D3841CA81B/UniversalMac_15.1_24B2083_Restore.ipsw"
 
 ASAHI_VERSION_URL="https://cdn.asahilinux.org/installer/latest"
 ASAHI_INSTALLER_BASE="https://cdn.asahilinux.org/installer"
@@ -162,7 +162,7 @@ M1N1_VER=$(
 echo "  m1n1: $M1N1_VER"
 
 echo
-echo "Probing exact J614s macOS 26.5.2 IPSW metadata (read-only)..."
+echo "Probing original J614s macOS 15.1 IPSW and stub plan (read-only)..."
 set +e
 "$PY" "$SCRIPT_DIR/probe_ipsw.py" "$J614S_IPSW_URL"
 PROBE_RC=$?
@@ -204,6 +204,8 @@ echo "  Asahi installer: $ASAHI_VERSION"
 echo "  m1n1:            $M1N1_VER"
 echo "  AEA helper:      ipsw v$IPSW_TOOL_VERSION (SHA-256 verified)"
 echo "  Target:          Mac16,8 / j614sap / T6040"
+echo "  Stub firmware:   macOS 15.1 (24B2083)"
+echo "  Recovery model:  paired Preboot/Recovery"
 echo "  Profile:         tethered m1n1 proxy only"
 echo
 echo "The upstream Asahi installer will still ask before resizing or creating"
