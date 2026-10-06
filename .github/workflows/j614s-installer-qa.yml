@@ -22,6 +22,7 @@ jobs:
           bash -n tools/j614s/installer/bootstrap.sh
           python3 -m py_compile tools/j614s/installer/patch_installer.py
           python3 -m py_compile tools/j614s/installer/probe_ipsw.py
+          python3 -m py_compile tools/j614s/installer/probe_local_layout.py
           python3 -m json.tool tools/j614s/installer/installer_data.json >/dev/null
 
       - name: Test read-only IPSW probe fixtures
