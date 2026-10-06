@@ -23,8 +23,9 @@ MODE=install
 case "${1:-}" in
     "") ;;
     --probe) MODE=probe ;;
+    --local-probe) MODE=local-probe ;;
     *)
-        echo "usage: $0 [--probe]" >&2
+        echo "usage: $0 [--probe|--local-probe]" >&2
         exit 2
         ;;
 esac
@@ -106,7 +107,11 @@ if [ "$MODE" = "install" ]; then
     echo "  Power:         AC"
 else
     echo "Preflight:"
-    echo "  Mode:          read-only IPSW probe"
+    if [ "$MODE" = "local-probe" ]; then
+        echo "  Mode:          read-only local Tahoe layout probe"
+    else
+        echo "  Mode:          read-only IPSW probe"
+    fi
     echo "  Model:         $MODEL"
     echo "  macOS:         $OS_VERSION ($(sw_vers -buildVersion))"
     echo "  Disk changes:  disabled"
@@ -160,6 +165,13 @@ M1N1_VER=$(
     "$PY" -c 'import m1n1; print(m1n1.get_version("boot/m1n1.bin") or "unknown")'
 )
 echo "  m1n1: $M1N1_VER"
+
+if [ "$MODE" = "local-probe" ]; then
+    echo
+    echo "Inspecting currently working macOS Preboot/paired-Recovery layout (read-only)..."
+    "$PY" "$SCRIPT_DIR/probe_local_layout.py"
+    exit 0
+fi
 
 echo
 echo "Probing original J614s macOS 15.1 IPSW and stub plan (read-only)..."
