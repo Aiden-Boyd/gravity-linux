@@ -112,7 +112,6 @@ jobs:
           git push origin HEAD:j614s-first-boot-v1
 
   build:
-    if: ${{ github.event_name != 'push' || !startsWith(github.event.head_commit.message, 'ci: persist patched J614s stage1 candidate') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 75
     strategy:
