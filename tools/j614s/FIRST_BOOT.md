@@ -31,12 +31,18 @@ downloads temporary files and verifies that the J614s 15.1 BaseSystem AEA path
 can actually be decrypted.
 
 The bootstrap keeps the reviewed Asahi installer logic at `v0.9.2`, but
-replaces its older stage-2 binary with the signed m1n1 `v1.9.9` release
-(commit `809541515659bf4e504807fd72bc0a539be5eee7`). The release ZIP is pinned
-by SHA-256 `4cb44a43298723ab1fcc1347a180e88fdb0899007b2bd0979ec60563d6505010`.
-This is deliberate: v1.9.9 contains post-v1.6.1 M4 SMP/cache, WFI/WFIT, MCC,
-NVMe and USB-C fixes. Neither installer nor m1n1 follows a moving `latest`
-pointer.
+replaces its older **stage-1** binary with a reproducible chainloading build of
+m1n1 `v1.9.9` source commit
+`809541515659bf4e504807fd72bc0a539be5eee7`. The stage-1 was built twice
+byte-identically in CI using `RELEASE=1 CHAINLOADING=1`, GCC cross tools,
+and Rust/Cargo 1.98.1 (matching the Asahi v1.9.9 release runner).
+
+The exact binary is pinned at repository commit
+`0faa926b4f5bd3079869c7ba5ac24602c719e90b`, size 3,866,624 bytes, SHA-256
+`50f15c53ee21da7083ae624e4fde49711d8dbdadbd472c7fcb6d1436965971f3`.
+The installer verifies all of those properties before replacing the packaged
+stage-1. It does **not** install the upstream `m1n1-stage2-v1.9.9.zip` in the
+stage-1 slot.
 
 Normal installer mode is intentionally separate because it *does* create the
 stub environment and enters Apple's authenticated boot-policy flow. Have a
@@ -64,7 +70,7 @@ discarding the most useful failure evidence.
 ## Host-side loader
 
 Use a second Linux/macOS host connected to the target by USB-C and the exact
-reviewed m1n1 v1.9.9 checkout matching the enrolled stage-2 binary:
+reviewed m1n1 v1.9.9 checkout matching the enrolled stage-1 source revision:
 
 ```sh
 git clone --depth 1 --branch v1.9.9 https://github.com/AsahiLinux/m1n1.git

@@ -52,11 +52,18 @@ jobs:
           grep -q 'ACK too short for sub header' drivers/hid/dockchannel-hid/dockchannel-hid.c
           grep -q 'platform_set_drvdata' drivers/hid/dockchannel-hid/dockchannel-hid.c
 
-          # Verify the exact signed m1n1 release artifact used by the installer.
-          curl -fsSL -o /tmp/m1n1-stage2-v1.9.9.zip https://github.com/AsahiLinux/m1n1/releases/download/v1.9.9/m1n1-stage2-v1.9.9.zip
-          echo '4cb44a43298723ab1fcc1347a180e88fdb0899007b2bd0979ec60563d6505010  /tmp/m1n1-stage2-v1.9.9.zip' | sha256sum -c -
-          python3 -c 'import zipfile; z=zipfile.ZipFile("/tmp/m1n1-stage2-v1.9.9.zip"); m=[n for n in z.namelist() if n.rstrip("/").endswith("m1n1.bin")]; assert len(m)==1, m; open("/tmp/m1n1.bin","wb").write(z.read(m[0]))'
-          strings /tmp/m1n1.bin | grep -qi t6040
+          # Verify the immutable, reproducibly built chainloading stage-1
+          # consumed by the installer. Never substitute the upstream stage2 ZIP.
+          PINNED_STAGE1_COMMIT=0faa926b4f5bd3079869c7ba5ac24602c719e90b
+          PINNED_STAGE1_SHA=50f15c53ee21da7083ae624e4fde49711d8dbdadbd472c7fcb6d1436965971f3
+          PINNED_STAGE1_URL="https://raw.githubusercontent.com/Aiden-Boyd/gravity-linux/$PINNED_STAGE1_COMMIT/tools/j614s/m1n1/m1n1-v1.9.9-chainloading.bin"
+          curl -fsSL -o /tmp/m1n1-stage1.bin "$PINNED_STAGE1_URL"
+          echo "$PINNED_STAGE1_SHA  /tmp/m1n1-stage1.bin" | sha256sum -c -
+          test "$(wc -c < /tmp/m1n1-stage1.bin)" -eq 3866624
+          strings /tmp/m1n1-stage1.bin | grep -Fq 'chosen.asahi,m1n1-stage1-version=v1.9.9'
+          grep -q "M1N1_STAGE1_REPO_COMMIT=\"$PINNED_STAGE1_COMMIT\"" tools/j614s/installer/bootstrap.sh
+          grep -q "M1N1_STAGE1_SHA256=\"$PINNED_STAGE1_SHA\"" tools/j614s/installer/bootstrap.sh
+          ! grep -q 'm1n1-stage2-v1.9.9' tools/j614s/installer/bootstrap.sh
 
       - name: Install build dependencies
         run: |

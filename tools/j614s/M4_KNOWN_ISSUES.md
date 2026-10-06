@@ -78,6 +78,9 @@ than every experiment ticket. It is a bring-up ledger, not a support promise.
 - **DockChannel module teardown:** the deliberate `BUG_ON(1)` remove callback
   has been replaced with worker draining, HID-child destruction, and workqueue
   cleanup so diagnostic module unload cannot intentionally panic the kernel.
-- **m1n1 stage1 provenance:** CI builds the exact signed v1.9.9 source commit
-  with `RELEASE=1 CHAINLOADING=1`. The installer must consume the resulting
-  pinned stage1 binary, not the upstream stage2 release ZIP.
+- **m1n1 stage1 provenance:** fixed. CI builds the exact v1.9.9 source commit
+  twice byte-identically with `RELEASE=1 CHAINLOADING=1`, GCC cross tools and
+  Rust/Cargo 1.98.1. The installer consumes immutable binary commit
+  `0faa926b4f5bd3079869c7ba5ac24602c719e90b` and verifies SHA-256
+  `50f15c53ee21da7083ae624e4fde49711d8dbdadbd472c7fcb6d1436965971f3`,
+  rather than placing the upstream stage2 release in the stage1 slot.
