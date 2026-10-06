@@ -12,6 +12,12 @@ The bootstrap refuses normal install mode unless the machine is Mac16,8,
 macOS is reviewed 26.x (26.5+), AC power is connected, at least 12 GiB is
 free, and no manually created APFS volume named exactly `m1n1` remains.
 
+It also requires the currently booted macOS version, current System Firmware
+(SFR) version, and SystemRecovery product version to match, requires normal
+`macOS` boot mode, and requires the default boot volume group to be the
+currently booted macOS volume group. This is a conservative J614s bring-up
+gate before Apple's later bless/boot-policy flow.
+
 It also refuses normal install mode when an existing or partial
 `Gravity Linux J614s Dev` stub is visible. Cleanup is intentionally manual
 so the bootstrap never guesses that an APFS container is disposable.
@@ -96,6 +102,19 @@ delete APFS partitions. It does not alter boot policy or Recovery state.
 
 Normal install mode runs the same probe automatically and refuses to proceed
 if the real IPSW cannot satisfy the planned stub construction.
+
+The same command also performs a read-only host firmware/Recovery preflight.
+It reports macOS, SFR, SystemRecovery, RestoreLongVersion values, boot mode,
+and boot/default VGIDs. A version or boot-target mismatch blocks normal install
+mode before APFS or boot-policy work.
+
+For additional inspection of the currently working macOS Preboot layout, run:
+
+    ./tools/j614s/installer/bootstrap.sh --local-probe
+
+The local probe enumerates the existing Preboot VGID directories and shallow
+restore/boot metadata without mounting Recovery volumes or modifying any disk,
+APFS, boot-policy, or Recovery state.
 
 ## Run
 
