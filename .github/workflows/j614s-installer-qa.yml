@@ -21,7 +21,59 @@ jobs:
         run: |
           bash -n tools/j614s/installer/bootstrap.sh
           python3 -m py_compile tools/j614s/installer/patch_installer.py
+          python3 -m py_compile tools/j614s/installer/probe_ipsw.py
           python3 -m json.tool tools/j614s/installer/installer_data.json >/dev/null
+
+      - name: Test read-only IPSW probe fixtures
+        run: |
+          python3 - <<'PY'
+          import plistlib, zipfile
+          from pathlib import Path
+
+          def make(path, with_restore_path):
+              ident = {
+                  "ApBoardID": "0x04",
+                  "ApChipID": "0x6040",
+                  "Info": {
+                      "DeviceClass": "j614sap",
+                      "RestoreBehavior": "Erase",
+                      "Variant": "macOS Customer",
+                      "BuildNumber": "25F84",
+                  },
+                  "Manifest": {
+                      "BaseSystem": {
+                          "Info": {"Path": "BaseSystem.dmg.aea"}
+                      }
+                  },
+              }
+              bless2 = {"SomeTahoeKey": "value"}
+              if with_restore_path:
+                  bless2["RestoreBundlePath"] = "./restore"
+
+              with zipfile.ZipFile(path, "w") as zf:
+                  zf.writestr("BuildManifest.plist", plistlib.dumps({"BuildIdentities": [ident]}))
+                  zf.writestr(
+                      "usr/standalone/bootcaches.plist",
+                      plistlib.dumps({"bless2": bless2}),
+                  )
+                  zf.writestr(
+                      "SystemVersion.plist",
+                      plistlib.dumps({
+                          "ProductVersion": "26.5.2",
+                          "ProductBuildVersion": "25F84",
+                      }),
+                  )
+                  zf.writestr("BaseSystem.dmg.aea", b"fixture")
+
+          make("/tmp/probe-pass.ipsw", True)
+          make("/tmp/probe-fail.ipsw", False)
+          PY
+
+          python3 tools/j614s/installer/probe_ipsw.py /tmp/probe-pass.ipsw
+          if python3 tools/j614s/installer/probe_ipsw.py /tmp/probe-fail.ipsw; then
+            echo "expected missing RestoreBundlePath fixture to fail" >&2
+            exit 1
+          fi
 
       - name: Fetch reviewed Asahi installer source
         run: |
