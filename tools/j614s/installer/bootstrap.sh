@@ -124,6 +124,7 @@ PY="./Frameworks/Python.framework/Versions/3.13/bin/python3.13"
 
 # Asahi's packaged Python is relocatable only when its bundled framework path
 # is exported, matching src/install.sh.
+export DYLD_LIBRARY_PATH="$TMP/Frameworks/Python.framework/Versions/Current/lib"
 export DYLD_FRAMEWORK_PATH="$TMP/Frameworks"
 if [ -f "$TMP/Frameworks/Python.framework/Versions/Current/etc/openssl/cert.pem" ]; then
     export SSL_CERT_FILE="$TMP/Frameworks/Python.framework/Versions/Current/etc/openssl/cert.pem"
