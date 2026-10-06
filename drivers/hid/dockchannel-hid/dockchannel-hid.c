@@ -1303,6 +1303,10 @@ static void dockchannel_hid_remove(struct platform_device *pdev)
 	if (!dchid)
 		return;
 
+	/* Stop the threaded RX callback before any backing state is torn down. */
+	if (dchid->dc)
+		dockchannel_await(dchid->dc, NULL, NULL, 0);
+
 	/*
 	 * No new async interface creation may race teardown. The DockChannel
 	 * transport itself is devm-owned by the platform device, so drain our
