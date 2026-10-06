@@ -230,6 +230,18 @@ def patch_stub(path: Path) -> None:
         raise RuntimeError("unexpected restore symlink layout in stub.py")
     text = text.replace(old_symlink, new_symlink, 1)
 
+    old_collect_restore = '''        bless2 = self.bootcaches["bless2"]
+        restore_bundle = os.path.join(self.pb_vgid, bless2["RestoreBundlePath"])
+        copied = set()
+'''
+    new_collect_restore = '''        restore_relpath, _ = self.get_restore_bundle_relpath()
+        restore_bundle = os.path.join(self.pb_vgid, restore_relpath)
+        copied = set()
+'''
+    if old_collect_restore not in text and new_collect_restore not in text:
+        raise RuntimeError("unexpected firmware restore-bundle layout in stub.py")
+    text = text.replace(old_collect_restore, new_collect_restore, 1)
+
     old_base_system = '''        if self.is_ota:
             self.copy_recompress("AssetData/payloadv2/basesystem_patches/arm64eBaseSystem.dmg",
                                  os.path.join(basesystem_path, "arm64eBaseSystem.dmg"))
@@ -282,6 +294,17 @@ def verify(main_py: Path, stub_py: Path) -> None:
     ):
         if item not in stub:
             raise RuntimeError(f"stub.py verification failed: missing {item!r}")
+
+    if 'bless2["RestoreBundlePath"]' in stub:
+        lines = [
+            f"{lineno}: {line}"
+            for lineno, line in enumerate(stub.splitlines(), 1)
+            if 'bless2["RestoreBundlePath"]' in line
+        ]
+        raise RuntimeError(
+            "stub.py verification failed: direct RestoreBundlePath indexes remain: "
+            + "; ".join(lines)
+        )
 
 
 def main() -> None:
