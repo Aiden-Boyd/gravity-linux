@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import plistlib
 import sys
 import zipfile
@@ -13,6 +14,11 @@ import zipfile
 
 def open_zip(source: str):
     if source.startswith(("http://", "https://")):
+        # When this script is launched by bootstrap.sh, the current working
+        # directory is the unpacked Asahi installer release. The script itself
+        # lives in the Gravity source tree, so add CWD explicitly before
+        # importing Asahi's packaged urlcache/util modules.
+        sys.path.insert(0, os.getcwd())
         try:
             import urlcache  # provided by the packaged Asahi installer
         except ImportError as exc:
@@ -158,7 +164,10 @@ def main() -> int:
         if zf is not None:
             zf.close()
         if owner is not None:
-            owner.close()
+            if hasattr(owner, "close_connection"):
+                owner.close_connection()
+            elif hasattr(owner, "close"):
+                owner.close()
 
 
 if __name__ == "__main__":
