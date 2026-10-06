@@ -15,6 +15,7 @@
 #include <linux/regmap.h>
 #include <linux/mfd/syscon.h>
 #include <linux/reset-controller.h>
+#include <linux/string.h>
 #include <linux/module.h>
 
 #define APPLE_PMGR_RESET        BIT(31)
