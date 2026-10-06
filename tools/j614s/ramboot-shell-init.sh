@@ -9,8 +9,11 @@ mkdir -p /run /tmp
 mount -t tmpfs tmpfs /run
 mount -t tmpfs tmpfs /tmp
 
+PROFILE="$(cat /etc/j614s-profile 2>/dev/null || echo diagnostic)"
+PROFILE_TAG="$(echo "$PROFILE" | tr '[:lower:]-' '[:upper:]_')"
+
 echo
-echo "=== J614S_${J614S_PROFILE:-DIAGNOSTIC}_RAMBOOT_OK ==="
+echo "=== J614S_${PROFILE_TAG}_RAMBOOT_OK ==="
 uname -a
 printf "model: "
 cat /proc/device-tree/model 2>/dev/null || true
