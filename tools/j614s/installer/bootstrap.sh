@@ -19,6 +19,18 @@ fail()
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 
+MODE=install
+case "${1:-}" in
+    "") ;;
+    --probe) MODE=probe ;;
+    *)
+        echo "usage: $0 [--probe]" >&2
+        exit 2
+        ;;
+esac
+
+J614S_IPSW_URL="https://updates.cdn-apple.com/2026SpringFCS/fullrestores/140-24263/B95838F0-6815-4F0B-A039-156526C081AD/UniversalMac_26.5.2_25F84_Restore.ipsw"
+
 ASAHI_VERSION_URL="https://cdn.asahilinux.org/installer/latest"
 ASAHI_INSTALLER_BASE="https://cdn.asahilinux.org/installer"
 
@@ -51,41 +63,54 @@ OS_MINOR=$(printf '%s\n' "$OS_VERSION" | awk -F. '{print $2}')
 [ "$OS_MAJOR" = "26" ] || fail "this v1 installer is reviewed only for macOS 26.x (found $OS_VERSION)"
 [ "$OS_MINOR" -ge 5 ] || fail "macOS 26.5 or newer is required (found $OS_VERSION)"
 
-if ! pmset -g batt | head -n 1 | grep -q "AC Power"; then
-    fail "connect the MacBook to AC power before modifying APFS/boot state"
+[ -d /System/Volumes/Data ] || fail "run this from the normal macOS installation"
+
+if [ "$MODE" = "install" ]; then
+    if ! pmset -g batt | head -n 1 | grep -q "AC Power"; then
+        fail "connect the MacBook to AC power before modifying APFS/boot state"
+    fi
+
+    PREEXISTING=$(
+        diskutil list 2>/dev/null |
+        awk '$0 ~ /APFS Volume m1n1([[:space:]]|$)/ {print $NF}' |
+        tr '\n' ' '
+    )
+    if [ -n "$PREEXISTING" ]; then
+        echo
+        echo "Found manually-created APFS volume(s) named exactly 'm1n1':"
+        for dev in $PREEXISTING; do
+            echo "  $dev"
+        done
+        echo
+        echo "This installer deliberately refuses to guess whether they are disposable."
+        echo "Remove only the empty test volumes you created manually, then rerun."
+        echo "Example (ONLY after verifying the identifier):"
+        echo "  diskutil apfs deleteVolume <diskXsY>"
+        exit 1
+    fi
+
+    if diskutil list 2>/dev/null | grep -Fq "Gravity Linux J614s Dev"; then
+        fail "an existing or partial 'Gravity Linux J614s Dev' stub is present; inspect and clean it before retrying"
+    fi
+
+    AVAIL_KB=$(df -k /System/Volumes/Data | awk 'NR==2 {print $4}')
+    MIN_KB=$((12 * 1024 * 1024))
+    [ "$AVAIL_KB" -ge "$MIN_KB" ] ||
+        fail "keep at least 12 GiB free on the macOS APFS container before continuing"
+
+    echo "Preflight:"
+    echo "  Mode:          install"
+    echo "  Model:         $MODEL"
+    echo "  macOS:         $OS_VERSION ($(sw_vers -buildVersion))"
+    echo "  Free space:    $((AVAIL_KB / 1024 / 1024)) GiB"
+    echo "  Power:         AC"
+else
+    echo "Preflight:"
+    echo "  Mode:          read-only IPSW probe"
+    echo "  Model:         $MODEL"
+    echo "  macOS:         $OS_VERSION ($(sw_vers -buildVersion))"
+    echo "  Disk changes:  disabled"
 fi
-
-[ -d /System/Volumes/Data ] || fail "run this first stage from the normal macOS installation"
-
-PREEXISTING=$(
-    diskutil list 2>/dev/null |
-    awk '$0 ~ /APFS Volume m1n1([[:space:]]|$)/ {print $NF}' |
-    tr '\n' ' '
-)
-if [ -n "$PREEXISTING" ]; then
-    echo
-    echo "Found manually-created APFS volume(s) named exactly 'm1n1':"
-    for dev in $PREEXISTING; do
-        echo "  $dev"
-    done
-    echo
-    echo "This installer deliberately refuses to guess whether they are disposable."
-    echo "Remove only the empty test volumes you created manually, then rerun."
-    echo "Example (ONLY after verifying the identifier):"
-    echo "  diskutil apfs deleteVolume <diskXsY>"
-    exit 1
-fi
-
-AVAIL_KB=$(df -k /System/Volumes/Data | awk 'NR==2 {print $4}')
-MIN_KB=$((12 * 1024 * 1024))
-[ "$AVAIL_KB" -ge "$MIN_KB" ] ||
-    fail "keep at least 12 GiB free on the macOS APFS container before continuing"
-
-echo "Preflight:"
-echo "  Model:         $MODEL"
-echo "  macOS:         $OS_VERSION ($(sw_vers -buildVersion))"
-echo "  Free space:    $((AVAIL_KB / 1024 / 1024)) GiB"
-echo "  Power:         AC"
 echo
 
 echo "Downloading upstream Asahi installer..."
@@ -134,6 +159,22 @@ M1N1_VER=$(
     "$PY" -c 'import m1n1; print(m1n1.get_version("boot/m1n1.bin") or "unknown")'
 )
 echo "  m1n1: $M1N1_VER"
+
+echo
+echo "Probing exact J614s macOS 26.5.2 IPSW metadata (read-only)..."
+set +e
+"$PY" "$SCRIPT_DIR/probe_ipsw.py" "$J614S_IPSW_URL"
+PROBE_RC=$?
+set -e
+if [ "$PROBE_RC" -ne 0 ]; then
+    fail "J614s IPSW compatibility probe failed; no installer disk changes are permitted"
+fi
+
+if [ "$MODE" = "probe" ]; then
+    echo
+    echo "Read-only probe complete. No APFS, boot-policy, or Recovery changes were made."
+    exit 0
+fi
 
 echo
 echo "Downloading pinned AEA helper (blacktop/ipsw v$IPSW_TOOL_VERSION)..."
