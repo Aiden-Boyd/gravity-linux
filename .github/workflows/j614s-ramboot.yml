@@ -51,6 +51,10 @@ jobs:
 
             make CROSS_COMPILE=aarch64-linux-gnu- defconfig
             sed -i 's/# CONFIG_STATIC is not set/CONFIG_STATIC=y/' .config
+            # BusyBox tc still references legacy CBQ UAPI types removed from
+            # current Ubuntu cross headers. tc is unnecessary for this RAM
+            # bring-up shell, so keep it out of the diagnostic image.
+            sed -i 's/CONFIG_TC=y/# CONFIG_TC is not set/' .config
             yes "" | make CROSS_COMPILE=aarch64-linux-gnu- oldconfig >/dev/null
             make -j"$(nproc)" CROSS_COMPILE=aarch64-linux-gnu- busybox
 
