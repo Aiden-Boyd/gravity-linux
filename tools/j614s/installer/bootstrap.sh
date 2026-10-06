@@ -23,10 +23,11 @@ MODE=install
 case "${1:-}" in
     "") ;;
     --probe) MODE=probe ;;
+    --deep-probe) MODE=deep-probe ;;
     --local-probe) MODE=local-probe ;;
     --cleanup-partial) MODE=cleanup-partial ;;
     *)
-        echo "usage: $0 [--probe|--local-probe|--cleanup-partial]" >&2
+        echo "usage: $0 [--probe|--deep-probe|--local-probe|--cleanup-partial]" >&2
         exit 2
         ;;
 esac
@@ -121,6 +122,8 @@ else
     echo "Preflight:"
     if [ "$MODE" = "local-probe" ]; then
         echo "  Mode:          read-only local Tahoe layout probe"
+    elif [ "$MODE" = "deep-probe" ]; then
+        echo "  Mode:          deep BaseSystem AEA probe (temporary files only)"
     else
         echo "  Mode:          read-only IPSW probe"
     fi
@@ -212,6 +215,26 @@ PROBE_RC=$?
 set -e
 if [ "$PROBE_RC" -ne 0 ]; then
     fail "J614s IPSW compatibility probe failed; no installer disk changes are permitted"
+fi
+
+if [ "$MODE" = "deep-probe" ]; then
+    echo
+    echo "Downloading pinned AEA helper for deep probe (blacktop/ipsw v$IPSW_TOOL_VERSION)..."
+    curl -fL --progress-bar -o "$IPSW_TOOL_ARCHIVE" "$IPSW_TOOL_URL"
+    ACTUAL_SHA=$(/usr/bin/shasum -a 256 "$IPSW_TOOL_ARCHIVE" | awk '{print $1}')
+    [ "$ACTUAL_SHA" = "$IPSW_TOOL_SHA256" ] ||
+        fail "AEA helper SHA-256 mismatch (got $ACTUAL_SHA)"
+    mkdir -p ipsw-tool
+    tar xzf "$IPSW_TOOL_ARCHIVE" -C ipsw-tool
+    IPSW_AEA_TOOL=$(find "$TMP/ipsw-tool" -type f -name ipsw | head -n 1)
+    [ -n "$IPSW_AEA_TOOL" ] || fail "could not find ipsw executable in pinned archive"
+    chmod +x "$IPSW_AEA_TOOL"
+
+    echo
+    "$PY" "$SCRIPT_DIR/probe_aes_base_system.py"         "$J614S_IPSW_URL" --tool "$IPSW_AEA_TOOL"
+    echo
+    echo "Deep probe complete. No APFS, boot-policy, or Recovery changes were made."
+    exit 0
 fi
 
 if [ "$MODE" = "probe" ]; then
