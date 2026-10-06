@@ -131,16 +131,27 @@ jobs:
           python3 tools/j614s/installer/patch_installer.py /tmp/asahi-source
           python3 -m py_compile /tmp/asahi-source/src/main.py /tmp/asahi-source/src/stub.py
 
-          grep -q '0x6040: "15.1"' /tmp/asahi-source/src/main.py
-          grep -q '"j614sap": Device("15.1", True)' /tmp/asahi-source/src/main.py
-          grep -q 'IPSW("15.1"' /tmp/asahi-source/src/main.py
+          python3 - <<'PY'
+          from pathlib import Path
 
-          grep -q 'def copy_aea_compress' /tmp/asahi-source/src/stub.py
-          grep -q 'def get_restore_bundle_relpath' /tmp/asahi-source/src/stub.py
-          grep -q 'SupportsPairedRecovery' /tmp/asahi-source/src/stub.py
-          grep -q 'relpath = "restore"' /tmp/asahi-source/src/stub.py
-          grep -q 'if restore_path_explicit:' /tmp/asahi-source/src/stub.py
-          ! grep -q 'bless2\["RestoreBundlePath"\]' /tmp/asahi-source/src/stub.py
+          main = Path("/tmp/asahi-source/src/main.py").read_text()
+          stub = Path("/tmp/asahi-source/src/stub.py").read_text()
+
+          checks = {
+              "T6040 minimum": '0x6040: "15.1"' in main,
+              "J614s device": '"j614sap": Device("15.1", True)' in main,
+              "15.1 IPSW": 'IPSW("15.1"' in main,
+              "AEA helper": "def copy_aea_compress" in stub,
+              "paired helper": "def get_restore_bundle_relpath" in stub,
+              "paired flag": "SupportsPairedRecovery" in stub,
+              "implicit restore": 'relpath = "restore"' in stub,
+              "legacy symlink guard": "if restore_path_explicit:" in stub,
+              "legacy direct index removed": 'bless2["RestoreBundlePath"]' not in stub,
+          }
+          failed = [name for name, ok in checks.items() if not ok]
+          if failed:
+              raise SystemExit("generated source checks failed: " + ", ".join(failed))
+          PY
 
       - name: Patch flattened release layout
         run: |
@@ -152,10 +163,22 @@ jobs:
           python3 tools/j614s/installer/patch_installer.py /tmp/asahi-flat
           python3 -m py_compile /tmp/asahi-flat/main.py /tmp/asahi-flat/stub.py
 
-          grep -q '0x6040: "15.1"' /tmp/asahi-flat/main.py
-          grep -q 'base_system_src.endswith(".aea")' /tmp/asahi-flat/stub.py
-          grep -q 'def get_restore_bundle_relpath' /tmp/asahi-flat/stub.py
-          ! grep -q 'bless2\["RestoreBundlePath"\]' /tmp/asahi-flat/stub.py
+          python3 - <<'PY'
+          from pathlib import Path
+
+          main = Path("/tmp/asahi-flat/main.py").read_text()
+          stub = Path("/tmp/asahi-flat/stub.py").read_text()
+
+          checks = {
+              "T6040 minimum": '0x6040: "15.1"' in main,
+              "AEA dispatch": 'base_system_src.endswith(".aea")' in stub,
+              "paired helper": "def get_restore_bundle_relpath" in stub,
+              "legacy direct index removed": 'bless2["RestoreBundlePath"]' not in stub,
+          }
+          failed = [name for name, ok in checks.items() if not ok]
+          if failed:
+              raise SystemExit("generated release checks failed: " + ", ".join(failed))
+          PY
 
       - name: Probe real original J614s macOS 15.1 IPSW
         env:
