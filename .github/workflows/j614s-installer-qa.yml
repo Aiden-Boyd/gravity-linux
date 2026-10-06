@@ -137,6 +137,10 @@ jobs:
           main = Path("/tmp/asahi-source/src/main.py").read_text()
           stub = Path("/tmp/asahi-source/src/stub.py").read_text()
 
+          for lineno, line in enumerate(stub.splitlines(), 1):
+              if 'bless2["RestoreBundlePath"]' in line:
+                  print(f"remaining direct RestoreBundlePath reference at {lineno}: {line}")
+
           checks = {
               "T6040 minimum": '0x6040: "15.1"' in main,
               "J614s device": '"j614sap": Device("15.1", True)' in main,
