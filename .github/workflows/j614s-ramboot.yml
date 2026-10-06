@@ -47,9 +47,22 @@ jobs:
           grep -q 'PWR_REQ_V2' drivers/hid/dockchannel-hid/dockchannel-hid.c
 
           # Verify the exact signed m1n1 release artifact we install/require.
-          curl -fsSL -o /tmp/m1n1-stage2-v1.9.9.zip             https://github.com/AsahiLinux/m1n1/releases/download/v1.9.9/m1n1-stage2-v1.9.9.zip
+          curl -fsSL -o /tmp/m1n1-stage2-v1.9.9.zip https://github.com/AsahiLinux/m1n1/releases/download/v1.9.9/m1n1-stage2-v1.9.9.zip
           echo '4cb44a43298723ab1fcc1347a180e88fdb0899007b2bd0979ec60563d6505010  /tmp/m1n1-stage2-v1.9.9.zip' | sha256sum -c -
-          M1N1_MEMBER="$(unzip -Z1 /tmp/m1n1-stage2-v1.9.9.zip | grep -E '(^|/)m1n1\.bin
+          python3 - <<'PY'
+          import pathlib
+          import zipfile
+
+          archive = pathlib.Path("/tmp/m1n1-stage2-v1.9.9.zip")
+          out = pathlib.Path("/tmp/m1n1.bin")
+          with zipfile.ZipFile(archive) as zf:
+              matches = [n for n in zf.namelist() if n.rstrip("/").endswith("m1n1.bin")]
+              if len(matches) != 1:
+                  raise SystemExit(f"expected exactly one m1n1.bin, got {matches!r}")
+              out.write_bytes(zf.read(matches[0]))
+          PY
+          strings /tmp/m1n1.bin | grep -qi t6040
+
       - name: Install build dependencies
         run: |
           sudo apt-get update
