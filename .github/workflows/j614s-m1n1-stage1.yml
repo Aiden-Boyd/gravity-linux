@@ -7,19 +7,28 @@ on:
       - j614s-first-boot-v1
     paths:
       - .github/workflows/j614s-m1n1-stage1.yml
+      - tools/j614s/m1n1/patch-v1.9.9-j614s.py
 
 permissions:
   contents: write
 
 jobs:
   build-stage1:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
-      - name: Checkout m1n1 v1.9.9
+      - name: Checkout Gravity branch
+        uses: actions/checkout@v4
+        with:
+          path: gravity
+          ref: j614s-first-boot-v1
+          fetch-depth: 1
+
+      - name: Checkout exact m1n1 v1.9.9
         uses: actions/checkout@v4
         with:
           repository: AsahiLinux/m1n1
-          ref: v1.9.9
+          ref: 809541515659bf4e504807fd72bc0a539be5eee7
           submodules: recursive
           path: m1n1
 
@@ -30,15 +39,23 @@ jobs:
           rustup toolchain install 1.98.1 --profile minimal
           rustup default 1.98.1
           rustup target add --toolchain 1.98.1 aarch64-unknown-none-softfloat
-          rustc --version
-          cargo --version
           rustc --version | grep -q 'rustc 1.98.1'
           cargo --version | grep -q 'cargo 1.98.1'
 
-      - name: Build exact chainloading stage1 twice
+      - name: Apply reviewed J614s patch set
         run: |
           test "$(git -C m1n1 rev-parse HEAD)" = "809541515659bf4e504807fd72bc0a539be5eee7"
+          python3 gravity/tools/j614s/m1n1/patch-v1.9.9-j614s.py m1n1
+          grep -q 'broken_wfi = true' m1n1/src/chickens.c
+          grep -q 'dapf_skip_entry' m1n1/src/dapf.c
+          grep -q 'LOGBUF_TOP_GUARD_SIZE' m1n1/src/kboot.c
+          grep -q 'mcc,t6041' m1n1/src/mcc.c
+          grep -q 't6040_features' m1n1/src/cpufreq.c
+          git -C m1n1 diff --check
+          git -C m1n1 diff > m1n1-j614s-v1.9.9.diff
 
+      - name: Build exact patched chainloading stage1 twice
+        run: |
           make -C m1n1 -k -j2 ARCH=aarch64-linux-gnu- RELEASE=1 CHAINLOADING=1
           grep -qx '#define RELEASE' m1n1/build/build_cfg.h
           grep -qx '#define CHAINLOADING' m1n1/build/build_cfg.h
@@ -48,45 +65,70 @@ jobs:
 
           make -C m1n1 clean
           make -C m1n1 -k -j2 ARCH=aarch64-linux-gnu- RELEASE=1 CHAINLOADING=1
-          grep -qx '#define RELEASE' m1n1/build/build_cfg.h
-          grep -qx '#define CHAINLOADING' m1n1/build/build_cfg.h
           cmp /tmp/m1n1-stage1-first.bin m1n1/build/m1n1.bin
 
-          sha256sum m1n1/build/m1n1.bin | tee m1n1-stage1-v1.9.9.sha256
+          sha256sum m1n1/build/m1n1.bin | tee m1n1-stage1-v1.9.9-j614s.sha256
+          test "$(wc -c < m1n1/build/m1n1.bin)" -eq 3866624
 
-      - name: Upload exact chainloading stage1
+      - name: Upload exact patched chainloading stage1
         uses: actions/upload-artifact@v4
         with:
-          name: m1n1-stage1-v1.9.9-chainloading
+          name: m1n1-stage1-v1.9.9-j614s
           path: |
             m1n1/build/m1n1.bin
             m1n1/build/build_cfg.h
-            m1n1-stage1-v1.9.9.sha256
+            m1n1-stage1-v1.9.9-j614s.sha256
+            m1n1-j614s-v1.9.9.diff
           if-no-files-found: error
 
-      - name: Checkout Gravity branch for pinning
-        uses: actions/checkout@v4
-        with:
-          path: gravity
-          ref: j614s-first-boot-v1
-          fetch-depth: 1
-
-      - name: Commit verified stage1 binary
+      - name: Persist patched stage1 and repin installer
+        shell: bash
         run: |
+          set -euo pipefail
+          HASH="$(sha256sum m1n1/build/m1n1.bin | awk '{print $1}')"
+          SIZE="$(wc -c < m1n1/build/m1n1.bin | tr -d ' ')"
+
           mkdir -p gravity/tools/j614s/m1n1
-          cp m1n1/build/m1n1.bin gravity/tools/j614s/m1n1/m1n1-v1.9.9-chainloading.bin
-          cp m1n1-stage1-v1.9.9.sha256 gravity/tools/j614s/m1n1/m1n1-v1.9.9-chainloading.sha256
+          cp m1n1/build/m1n1.bin gravity/tools/j614s/m1n1/m1n1-v1.9.9-j614s-chainloading.bin
+          printf '%s  %s\n' "$HASH" "m1n1-v1.9.9-j614s-chainloading.bin" > gravity/tools/j614s/m1n1/m1n1-v1.9.9-j614s-chainloading.sha256
 
           cd gravity
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -f tools/j614s/m1n1/m1n1-v1.9.9-chainloading.bin
-          git add tools/j614s/m1n1/m1n1-v1.9.9-chainloading.sha256
+          git add -f tools/j614s/m1n1/m1n1-v1.9.9-j614s-chainloading.bin
+          git add tools/j614s/m1n1/m1n1-v1.9.9-j614s-chainloading.sha256
 
-          if git diff --cached --quiet; then
-            echo "Pinned stage1 already matches this exact build."
-            exit 0
+          if ! git diff --cached --quiet; then
+            git commit -m "tools: j614s: persist patched m1n1 v1.9.9 stage1"
+            git push origin HEAD:j614s-first-boot-v1
           fi
 
-          git commit -m "tools: j614s: pin m1n1 v1.9.9 chainloading stage1"
-          git push origin HEAD:j614s-first-boot-v1
+          PIN_COMMIT="$(git rev-parse HEAD)"
+
+          python3 - "$PIN_COMMIT" "$HASH" "$SIZE" <<'PY'
+          from pathlib import Path
+          import re, sys
+
+          pin, sha, size = sys.argv[1:]
+          bootstrap = Path("tools/j614s/installer/bootstrap.sh")
+          s = bootstrap.read_text()
+          s = re.sub(r'^M1N1_STAGE1_REPO_COMMIT="[^"]+"$', f'M1N1_STAGE1_REPO_COMMIT="{pin}"', s, flags=re.M)
+          s = re.sub(r'^M1N1_STAGE1_URL="[^"]+"$', 'M1N1_STAGE1_URL="https://raw.githubusercontent.com/Aiden-Boyd/gravity-linux/$M1N1_STAGE1_REPO_COMMIT/tools/j614s/m1n1/m1n1-v1.9.9-j614s-chainloading.bin"', s, flags=re.M)
+          s = re.sub(r'^M1N1_STAGE1_SHA256="[^"]+"$', f'M1N1_STAGE1_SHA256="{sha}"', s, flags=re.M)
+          s = re.sub(r'^M1N1_STAGE1_SIZE="[^"]+"$', f'M1N1_STAGE1_SIZE="{size}"', s, flags=re.M)
+          bootstrap.write_text(s)
+
+          main = Path(".github/workflows/j614s-ramboot.yml")
+          s = main.read_text()
+          s = re.sub(r'PINNED_STAGE1_COMMIT=[0-9a-f]{40}', f'PINNED_STAGE1_COMMIT={pin}', s)
+          s = re.sub(r'PINNED_STAGE1_SHA=[0-9a-f]{64}', f'PINNED_STAGE1_SHA={sha}', s)
+          s = s.replace('tools/j614s/m1n1/m1n1-v1.9.9-chainloading.bin',
+                        'tools/j614s/m1n1/m1n1-v1.9.9-j614s-chainloading.bin')
+          main.write_text(s)
+          PY
+
+          git add tools/j614s/installer/bootstrap.sh .github/workflows/j614s-ramboot.yml
+          if ! git diff --cached --quiet; then
+            git commit -m "tools: j614s: pin hardened M4 Pro stage1"
+            git push origin HEAD:j614s-first-boot-v1
+          fi
