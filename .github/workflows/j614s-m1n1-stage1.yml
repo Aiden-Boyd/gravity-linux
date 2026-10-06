@@ -55,6 +55,8 @@ jobs:
           git -C m1n1 diff > m1n1-j614s-v1.9.9.diff
 
       - name: Build exact patched chainloading stage1 twice
+        env:
+          M1N1_VERSION_TAG: v1.9.9-j614s.1
         run: |
           make -C m1n1 -k -j2 ARCH=aarch64-linux-gnu- RELEASE=1 CHAINLOADING=1
           grep -qx '#define RELEASE' m1n1/build/build_cfg.h
@@ -69,6 +71,8 @@ jobs:
 
           sha256sum m1n1/build/m1n1.bin | tee m1n1-stage1-v1.9.9-j614s.sha256
           test "$(wc -c < m1n1/build/m1n1.bin)" -eq 3866624
+          strings m1n1/build/m1n1.bin | grep -Fq 'chosen.asahi,m1n1-stage1-version=v1.9.9-j614s.1'
+          test "$(sha256sum m1n1/build/m1n1.bin | awk '{print $1}')" = "40e9510d539fb539f09c1b944ab3d1c23f2d7f8ed604e1c200bedf5564249499"
 
       - name: Upload exact patched chainloading stage1
         uses: actions/upload-artifact@v4
