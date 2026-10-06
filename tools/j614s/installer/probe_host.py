@@ -9,24 +9,38 @@ import json
 
 
 def evaluate_alignment(info: dict) -> tuple[bool, list[str]]:
+    """Return hard blockers for boot-policy work.
+
+    SystemRecovery commonly lags the booted macOS/SFR version on otherwise
+    normal Apple Silicon installations, so version skew alone is not a blocker.
+    Likewise, current macOS can produce bputil output that older Asahi parsers
+    do not recognize; an "Unknown" boot mode is therefore handled as a warning
+    when the booted and default volume-group IDs still match.
+    """
     reasons = []
 
-    versions = {
-        "macOS": info.get("macos_version"),
-        "main firmware": info.get("sfr_version"),
-        "SystemRecovery": info.get("system_recovery_version"),
-    }
-    if any(not value for value in versions.values()):
-        missing = [name for name, value in versions.items() if not value]
+    macos = info.get("macos_version")
+    sfr = info.get("sfr_version")
+    sros = info.get("system_recovery_version")
+
+    if not macos or not sfr:
+        missing = []
+        if not macos:
+            missing.append("macOS")
+        if not sfr:
+            missing.append("main firmware")
         reasons.append("missing version data: " + ", ".join(missing))
-    elif len(set(versions.values())) != 1:
+    elif macos != sfr:
         reasons.append(
-            "version mismatch: "
-            + ", ".join(f"{name}={value}" for name, value in versions.items())
+            f"macOS/main firmware mismatch: macOS={macos}, main firmware={sfr}"
         )
 
-    if info.get("boot_mode") != "macOS":
-        reasons.append(f"boot mode is {info.get('boot_mode')!r}, not normal macOS")
+    if not sros or sros == "0":
+        reasons.append("SystemRecovery version is unavailable")
+
+    boot_mode = info.get("boot_mode")
+    if boot_mode not in ("macOS", "Unknown", None):
+        reasons.append(f"boot mode is {boot_mode!r}, not normal macOS")
 
     boot_vgid = info.get("boot_vgid")
     default_vgid = info.get("default_boot_vgid")
@@ -38,6 +52,27 @@ def evaluate_alignment(info: dict) -> tuple[bool, list[str]]:
         )
 
     return not reasons, reasons
+
+
+def evaluate_warnings(info: dict) -> list[str]:
+    warnings = []
+
+    macos = info.get("macos_version")
+    sfr = info.get("sfr_version")
+    sros = info.get("system_recovery_version")
+    if macos and sfr and sros and len({macos, sfr, sros}) != 1:
+        warnings.append(
+            "SystemRecovery version differs from the booted macOS/main firmware: "
+            f"macOS={macos}, main firmware={sfr}, SystemRecovery={sros}"
+        )
+
+    if info.get("boot_mode") in ("Unknown", None):
+        warnings.append(
+            "bputil boot mode could not be classified by the packaged Asahi parser; "
+            "matching boot/default VGIDs are used as the safety gate instead"
+        )
+
+    return warnings
 
 
 def collect() -> dict:
@@ -76,8 +111,10 @@ def main() -> int:
     try:
         result = collect()
         ready, reasons = evaluate_alignment(result)
+        warnings = evaluate_warnings(result)
         result["ready_for_boot_policy"] = ready
         result["blocking_reasons"] = reasons
+        result["warnings"] = warnings
 
         if args.json:
             print(json.dumps(result, indent=2, sort_keys=True))
@@ -114,7 +151,9 @@ def main() -> int:
                 + ("PASS" if ready else "BLOCKED")
             )
             for reason in reasons:
-                print(f"  - {reason}")
+                print(f"  BLOCKER: {reason}")
+            for warning in warnings:
+                print(f"  WARNING: {warning}")
 
         return 0 if ready else 2
     except Exception as exc:
