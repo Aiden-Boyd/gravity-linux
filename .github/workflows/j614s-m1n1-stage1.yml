@@ -80,8 +80,8 @@ jobs:
           cd gravity
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add tools/j614s/m1n1/m1n1-v1.9.9-chainloading.bin \
-                  tools/j614s/m1n1/m1n1-v1.9.9-chainloading.sha256
+          git add -f tools/j614s/m1n1/m1n1-v1.9.9-chainloading.bin
+          git add tools/j614s/m1n1/m1n1-v1.9.9-chainloading.sha256
 
           if git diff --cached --quiet; then
             echo "Pinned stage1 already matches this exact build."
