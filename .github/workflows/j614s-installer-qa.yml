@@ -48,12 +48,27 @@ jobs:
           ready, reasons = mod.evaluate_alignment(good)
           assert ready is True
           assert reasons == []
+          assert mod.evaluate_warnings(good) == []
 
-          mismatch = dict(good)
-          mismatch["system_recovery_version"] = "26.3"
-          ready, reasons = mod.evaluate_alignment(mismatch)
+          # Match the physical J614s observation: SystemRecovery can lag
+          # behind macOS/SFR, and the packaged Asahi parser can return Unknown
+          # for current bputil output. With matching boot/default VGIDs this is
+          # warning-only, not a hard blocker.
+          observed = dict(good)
+          observed["system_recovery_version"] = "26.3"
+          observed["boot_mode"] = "Unknown"
+          ready, reasons = mod.evaluate_alignment(observed)
+          assert ready is True
+          assert reasons == []
+          warnings = mod.evaluate_warnings(observed)
+          assert any("SystemRecovery version differs" in warning for warning in warnings)
+          assert any("bputil boot mode" in warning for warning in warnings)
+
+          firmware_mismatch = dict(good)
+          firmware_mismatch["sfr_version"] = "26.5"
+          ready, reasons = mod.evaluate_alignment(firmware_mismatch)
           assert ready is False
-          assert any("version mismatch" in reason for reason in reasons)
+          assert any("macOS/main firmware mismatch" in reason for reason in reasons)
 
           wrong_default = dict(good)
           wrong_default["default_boot_vgid"] = "B"
