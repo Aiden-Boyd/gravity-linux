@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - j614s-ramboot-test-v1
+      - j614s-first-boot-v1
   workflow_dispatch:
 
 permissions:
@@ -167,6 +168,8 @@ jobs:
           cp "initramfs-j614s-$PROFILE.cpio.gz" "$OUT/initramfs.cpio.gz"
           cp .config "$OUT/kernel.config"
           cp tools/j614s/RAMBOOT_LOAD_ORDER.txt "$OUT/LOAD_ORDER.txt"
+          cp tools/j614s/tethered-boot.sh "$OUT/BOOT_FROM_HOST.sh"
+          chmod 0755 "$OUT/BOOT_FROM_HOST.sh"
           printf '%s\n' "$PROFILE" > "$OUT/PROFILE.txt"
 
           if [ "$PROFILE" = safe ]; then

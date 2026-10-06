@@ -1,0 +1,15 @@
+{
+  "os_list": [
+    {
+      "name": "Gravity Linux J614s tethered development (m1n1 proxy only)",
+      "default_os_name": "Gravity Linux J614s Dev",
+      "expert": true,
+      "boot_object": "m1n1.bin",
+      "external_boot": true,
+      "supported_fw": [
+        "15.1"
+      ],
+      "partitions": []
+    }
+  ]
+}
