@@ -145,6 +145,13 @@ jobs:
           set -e
           test "$rc" -eq 2
 
+      - name: Probe original J614s macOS 15.1 restore metadata
+        env:
+          PYTHONPATH: /tmp/asahi/src
+        run: |
+          python3 tools/j614s/installer/probe_ipsw.py \
+            https://updates.cdn-apple.com/2024FallFCS/fullrestores/072-12302/3786987A-AD94-4BFB-81B8-56D3841CA81B/UniversalMac_15.1_24B2083_Restore.ipsw
+
       - name: Verify tethered-only profile
         run: |
           python3 - <<'PY'
