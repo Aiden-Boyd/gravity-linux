@@ -31,40 +31,36 @@ jobs:
 
       - name: Install build dependencies
         run: |
-          # Host build dependencies first. Do not enable arm64 multiarch yet:
-          # GitHub's amd64 runner mirrors do not serve ARM64 Packages indexes.
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            bc bison build-essential clang cpio device-tree-compiler flex \
+            bc bison build-essential clang cpio curl device-tree-compiler flex \
             gcc-aarch64-linux-gnu kmod libc6-dev-arm64-cross \
             libelf-dev libssl-dev lld llvm make
 
-          # Diagnostic/Yolo initramfs uses Ubuntu's static ARM64 BusyBox.
-          # Route ARM64 specifically through ports.ubuntu.com and keep the
-          # runner's normal Ubuntu mirrors amd64-only.
+          # Diagnostic/Yolo initramfs needs an interactive static ARM64 shell.
+          # Cross-build a pinned BusyBox release from its official source and
+          # verify the release checksum published alongside the tarball.
           if [ "$PROFILE" != safe ]; then
-            sudo dpkg --add-architecture arm64
+            BUSYBOX_VERSION=1.38.0
+            cd /tmp
+            curl -fsSLO "https://busybox.net/downloads/busybox-$BUSYBOX_VERSION.tar.bz2"
+            curl -fsSLO "https://busybox.net/downloads/busybox-$BUSYBOX_VERSION.tar.bz2.sha256"
+            sha256sum -c "busybox-$BUSYBOX_VERSION.tar.bz2.sha256"
+            tar xjf "busybox-$BUSYBOX_VERSION.tar.bz2"
+            cd "busybox-$BUSYBOX_VERSION"
 
-            if [ -f /etc/apt/sources.list.d/ubuntu.sources ]; then
-              sudo sed -i '/^Architectures:/d' /etc/apt/sources.list.d/ubuntu.sources
-              sudo sed -i '/^Types: deb$/a Architectures: amd64' /etc/apt/sources.list.d/ubuntu.sources
-            fi
+            make CROSS_COMPILE=aarch64-linux-gnu- defconfig
+            sed -i 's/# CONFIG_STATIC is not set/CONFIG_STATIC=y/' .config
+            yes "" | make CROSS_COMPILE=aarch64-linux-gnu- oldconfig >/dev/null
+            make -j"$(nproc)" CROSS_COMPILE=aarch64-linux-gnu- busybox
 
-            cat <<'EOF' | sudo tee /etc/apt/sources.list.d/ubuntu-arm64.sources >/dev/null
-          Types: deb
-          URIs: http://ports.ubuntu.com/ubuntu-ports
-          Suites: noble noble-updates noble-backports noble-security
-          Components: main universe restricted multiverse
-          Architectures: arm64
-          Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
-          EOF
-
-            sudo apt-get update
-            apt-get download busybox-static:arm64
-            mkdir -p /tmp/busybox-arm64
-            dpkg-deb -x busybox-static_*_arm64.deb /tmp/busybox-arm64
-            test -x /tmp/busybox-arm64/bin/busybox
+            mkdir -p /tmp/busybox-arm64/bin
+            cp busybox /tmp/busybox-arm64/bin/busybox
+            file /tmp/busybox-arm64/bin/busybox
             readelf -h /tmp/busybox-arm64/bin/busybox | grep -q 'Machine:.*AArch64'
+            file /tmp/busybox-arm64/bin/busybox | grep -q 'statically linked'
+
+            cd "$GITHUB_WORKSPACE"
           fi
 
       - name: Configure J614s kernel profile
