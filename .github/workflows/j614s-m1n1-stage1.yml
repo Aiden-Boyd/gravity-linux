@@ -106,7 +106,8 @@ jobs:
 
           git -C gravity config user.name "github-actions[bot]"
           git -C gravity config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git -C gravity add -f tools/j614s/m1n1/m1n1-v1.9.9-j614s.4-chainloading.bin\n          git -C gravity add tools/j614s/m1n1/m1n1-stage1-v1.9.9-j614s.4.sha256
+          git -C gravity add -f tools/j614s/m1n1/m1n1-v1.9.9-j614s.4-chainloading.bin
+          git -C gravity add tools/j614s/m1n1/m1n1-stage1-v1.9.9-j614s.4.sha256
           git -C gravity commit -m "j614s: publish reproducible m1n1 stage1 v1.9.9-j614s.4"
           BIN_COMMIT="$(git -C gravity rev-parse HEAD)"
 
