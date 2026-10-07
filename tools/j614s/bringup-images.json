@@ -110,11 +110,10 @@
       "id": "input",
       "order": 80,
       "purpose": "DockChannel/MTP keyboard and trackpad",
-      "source_branch": null,
-      "source_commit": null,
+      "source_branch": "j614s-input-prep-v1",
+      "source_commit": "a431bb16473694685a0be5ffe4d69b514192057f",
       "source_gate": "input",
-      "build_enabled": false,
-      "blocked_reason": "Needs a dedicated isolated profile instead of borrowing FULL-DIAGNOSTIC.",
+      "build_enabled": true,
       "boot_after": [
         "safe"
       ],
@@ -124,11 +123,10 @@
       "id": "power",
       "order": 90,
       "purpose": "Battery, sensors, lid, RTC and cpufreq/thermal stack",
-      "source_branch": null,
-      "source_commit": null,
+      "source_branch": "j614s-power-prep-v1",
+      "source_commit": "e1d3d151ab277e92c75e8a802686e34def75cc56",
       "source_gate": "power",
-      "build_enabled": false,
-      "blocked_reason": "Needs isolated SMC consumer source profile and qualification.",
+      "build_enabled": true,
       "boot_after": [
         "smc-thin"
       ],
