@@ -1,5 +1,7 @@
 name: J614s GPU Prep Audit
 
+# Static-only: this workflow never touches J614s hardware.
+
 on:
   push:
     branches:
