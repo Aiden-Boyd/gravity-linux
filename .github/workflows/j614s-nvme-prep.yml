@@ -12,6 +12,11 @@ on:
       - 'tools/j614s/NVME_BRINGUP.md'
       - 'tools/j614s/nvme-audit.sh'
       - 'tools/j614s/t6040-nvme-evidence.json'
+      - 'tools/j614s/t6040-nvme-node-skeleton.json'
+      - 'tools/j614s/NVME_PROVENANCE.md'
+      - 'tools/j614s/nvme_candidate_gate.py'
+      - 'tools/j614s/nvme-candidate-contract.example.json'
+      - 'tools/j614s/test_nvme_candidate_gate.py'
       - 'arch/arm64/boot/dts/apple/t6040*.dts'
       - 'arch/arm64/boot/dts/apple/t6040*.dtsi'
   workflow_dispatch:
@@ -26,10 +31,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Checkout pinned m1n1 source reference
+        uses: actions/checkout@v4
+        with:
+          repository: AsahiLinux/m1n1
+          ref: 2460b604c6f016956ead711823605eea840c602e
+          submodules: recursive
+          path: m1n1
+
       - name: Validate evidence and fail-closed policy
         run: |
           sh -n tools/j614s/nvme-audit.sh
           sh tools/j614s/nvme-audit.sh
+          python3 -m py_compile tools/j614s/nvme_candidate_gate.py tools/j614s/test_nvme_candidate_gate.py
+          PYTHONPATH=tools/j614s python3 -m unittest -v tools/j614s/test_nvme_candidate_gate.py
+
+          # Current Gravity is intentionally not an admitted T6040 candidate.
+          if python3 tools/j614s/nvme_candidate_gate.py               --linux .               --m1n1 m1n1               --contract tools/j614s/nvme-candidate-contract.example.json; then
+            echo "current prep tree unexpectedly passed candidate admission" >&2
+            exit 1
+          fi
 
           python3 - <<'PY'
           import json
@@ -53,6 +74,21 @@ jobs:
           assert d["known_working_boundary"]["linux_experimental"]["not_proven_safe_for_normal_io"] is True
           assert d["gravity_current_driver_contract"]["explicit_t6040_compatible_present"] is False
           assert d["gravity_current_driver_contract"]["separate_nvmmu_named_resource_present"] is False
+
+          s = json.load(open("tools/j614s/t6040-nvme-node-skeleton.json"))
+          assert s["compile_into_normal_dtb"] is False
+          assert s["enable_by_default"] is False
+          assert s["nvme"]["resources_from_evidence"][0]["base"] == "0x44dcc0000"
+          assert s["nvme"]["resources_from_evidence"][2]["base"] == "0x40dcc0000"
+          PY
+
+          python3 - <<'PY'
+          import pathlib, sys
+          sys.path.insert(0, "tools/j614s")
+          import nvme_candidate_gate as gate
+          checks = gate.check_m1n1(pathlib.Path("m1n1"))
+          failed = [c for c in checks if not c.passed]
+          assert not failed, failed
           PY
 
           ! grep -R -E 'apple,t6040-nvme-ans2|nvme@44dcc0000|ans_nvme:'             arch/arm64/boot/dts/apple/t6040*.dts             arch/arm64/boot/dts/apple/t6040*.dtsi
