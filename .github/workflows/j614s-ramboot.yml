@@ -49,6 +49,7 @@ jobs:
           grep -q 't6040_features' m1n1/src/cpufreq.c
           grep -q 't6040_pcie_requested' m1n1/src/kboot.c
           grep -q 'T6040 disabled by target DT; leaving PCIe untouched' m1n1/src/kboot.c
+          grep -q 'skipping unsupported T6040 init during J614s bring-up' m1n1/src/kboot.c
           grep -q 'APCIE_PHY_CTRL_RESET_T8132 BIT(4)' m1n1/src/pcie.c
           git -C m1n1 diff --check
           git -C m1n1 diff > m1n1-j614s-v1.9.9.diff
@@ -56,7 +57,7 @@ jobs:
       - name: Build stage1 twice reproducibly
         env:
           RUSTUP_TOOLCHAIN: 1.98.1
-          M1N1_VERSION_TAG: v1.9.9-j614s.3
+          M1N1_VERSION_TAG: v1.9.9-j614s.4
         run: |
           make -C m1n1 ARCH=aarch64-linux-gnu- RELEASE=1 CHAINLOADING=1 -j2
           cp m1n1/build/m1n1.bin /tmp/m1n1-first.bin
@@ -68,12 +69,12 @@ jobs:
           SHA="$(sha256sum m1n1/build/m1n1.bin | awk '{print $1}')"
           printf 'candidate-size=%s\ncandidate-sha256=%s\n' "$SIZE" "$SHA"
           printf '%s  %s\n' "$SHA" "m1n1.bin" | tee m1n1-j614s-v1.9.9.sha256
-          strings m1n1/build/m1n1.bin | grep -Fq 'chosen.asahi,m1n1-stage1-version=v1.9.9-j614s.3'
+          strings m1n1/build/m1n1.bin | grep -Fq 'chosen.asahi,m1n1-stage1-version=v1.9.9-j614s.4'
 
       - name: Upload patched stage1 candidate
         uses: actions/upload-artifact@v4
         with:
-          name: m1n1-stage1-v1.9.9-j614s.3-candidate
+          name: m1n1-stage1-v1.9.9-j614s.4-candidate
           path: |
             m1n1/build/m1n1.bin
             m1n1-j614s-v1.9.9.sha256
@@ -129,6 +130,10 @@ jobs:
           grep -q 'apple,t6041-pmgr-pwrstate' drivers/pmdomain/apple/pmgr-pwrstate.c
           grep -q 'skip_auto_enable' drivers/pmdomain/apple/pmgr-pwrstate.c
           grep -Eq 'BRCMF_BSS_INFO_MAX_VERSION[[:space:]]+116' drivers/net/wireless/broadcom/brcm80211/brcmfmac/fwil_types.h
+          grep -q 'BRCMF_FW_ENTRY(BRCM_CC_4388_CHIP_ID, 0x00000040, 4388C2)' drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
+          grep -q 'HID_TYPE_SPI_KEYBOARD' drivers/hid/dockchannel-hid/dockchannel-hid.c
+          grep -q 'HID_TYPE_SPI_MOUSE' drivers/hid/dockchannel-hid/dockchannel-hid.c
+          grep -q '0x0de70000' arch/arm64/boot/dts/apple/t6040.dtsi
           grep -q 'frequency \* 1000UL' drivers/cpufreq/apple-soc-cpufreq.c
           grep -q 'compatible = "pci14e4,4434"' arch/arm64/boot/dts/apple/t6040-j614s-all.dts
           grep -q 'compatible = "pci14e4,5f72"' arch/arm64/boot/dts/apple/t6040-j614s-all.dts
@@ -136,6 +141,9 @@ jobs:
           grep -q 'apple,antenna-sku = "X3"' arch/arm64/boot/dts/apple/t6040-j614s-all.dts
           grep -q 'pwren-gpios = <&smc_gpio 0x13 GPIO_ACTIVE_HIGH>' arch/arm64/boot/dts/apple/t6040-j614s-all.dts
           grep -q 'pwren-gpios = <&smc_gpio 0x19 GPIO_ACTIVE_HIGH>' arch/arm64/boot/dts/apple/t6040-j614s-all.dts
+          grep -q 'cpufreq@210e20000' arch/arm64/boot/dts/apple/t6040-j614s-all.dts
+          grep -q '4512000000' arch/arm64/boot/dts/apple/t6040-j614s-all.dts
+          grep -q 'performance-domains = <&cpufreq_p0>' arch/arm64/boot/dts/apple/t6040-j614s-all.dts
 
           # A new stage1 candidate is being rebuilt and repinned. Until its
           # immutable hash is committed, normal install mode must fail closed.
@@ -196,13 +204,13 @@ jobs:
           grep -qx 'CONFIG_SERIAL_SAMSUNG_CONSOLE=y' .config
 
           echo "Resolved J614s profile symbols:"
-          grep -E '^CONFIG_(RFKILL|CFG80211|BT|BT_HCIBCM4377|ARM_APPLE_SOC_CPUFREQ|PINCTRL_APPLE_GPIO|APPLE_MAILBOX|APPLE_RTKIT|APPLE_RTKIT_HELPER|APPLE_DART|APPLE_SART|MFD_MACSMC|GPIO_MACSMC|APPLE_DOCKCHANNEL|HID_DOCKCHANNEL|PCIE_APPLE|NVME_APPLE|SPI_APPLE|BRCMFMAC|BRCMFMAC_PCIE|MMC_SDHCI|MMC_SDHCI_PCI|SND_SOC_APPLE_MCA|SND_SOC_APPLE_MACAUDIO|USB_XHCI_HCD)=' .config || true
+          grep -E '^CONFIG_(RFKILL|CFG80211|BT|BT_HCIBCM4377|ARM_APPLE_SOC_CPUFREQ|HID_APPLE|HID_MAGICMOUSE|MACSMC_POWER|SENSORS_MACSMC_HWMON|INPUT_MACSMC_INPUT|PINCTRL_APPLE_GPIO|APPLE_MAILBOX|APPLE_RTKIT|APPLE_RTKIT_HELPER|APPLE_DART|APPLE_SART|MFD_MACSMC|GPIO_MACSMC|APPLE_DOCKCHANNEL|HID_DOCKCHANNEL|PCIE_APPLE|NVME_APPLE|SPI_APPLE|BRCMFMAC|BRCMFMAC_PCIE|MMC_SDHCI|MMC_SDHCI_PCI|SND_SOC_APPLE_MCA|SND_SOC_APPLE_MACAUDIO|USB_XHCI_HCD)=' .config || true
 
           case "$PROFILE" in
             safe)
-              if grep -Eq '^CONFIG_(NVME_APPLE|BLK_DEV_NVME|PCIE_APPLE|APPLE_DART|MFD_MACSMC|APPLE_DOCKCHANNEL|HID_DOCKCHANNEL|BRCMFMAC|BT_HCIBCM4377|WLAN|BT|MMC|USB)=[ym]$' .config; then
+              if grep -Eq '^CONFIG_(NVME_APPLE|BLK_DEV_NVME|PCIE_APPLE|APPLE_DART|MFD_MACSMC|MACSMC_POWER|SENSORS_MACSMC_HWMON|INPUT_MACSMC_INPUT|APPLE_DOCKCHANNEL|HID_DOCKCHANNEL|HID_MAGICMOUSE|BRCMFMAC|BT_HCIBCM4377|WLAN|BT|MMC|USB)=[ym]$' .config; then
                 echo "SAFE profile unexpectedly enabled a hardware-facing driver:" >&2
-                grep -E '^CONFIG_(NVME_APPLE|BLK_DEV_NVME|PCIE_APPLE|APPLE_DART|MFD_MACSMC|APPLE_DOCKCHANNEL|HID_DOCKCHANNEL|BRCMFMAC|BT_HCIBCM4377|WLAN|BT|MMC|USB)=' .config >&2 || true
+                grep -E '^CONFIG_(NVME_APPLE|BLK_DEV_NVME|PCIE_APPLE|APPLE_DART|MFD_MACSMC|MACSMC_POWER|SENSORS_MACSMC_HWMON|INPUT_MACSMC_INPUT|APPLE_DOCKCHANNEL|HID_DOCKCHANNEL|HID_MAGICMOUSE|BRCMFMAC|BT_HCIBCM4377|WLAN|BT|MMC|USB)=' .config >&2 || true
                 exit 1
               fi
               ;;
@@ -212,6 +220,11 @@ jobs:
               grep -qx 'CONFIG_MFD_MACSMC=m' .config
               grep -qx 'CONFIG_GPIO_MACSMC=m' .config
               grep -qx 'CONFIG_HID_DOCKCHANNEL=m' .config
+              grep -qx 'CONFIG_HID_APPLE=m' .config
+              grep -qx 'CONFIG_HID_MAGICMOUSE=m' .config
+              grep -qx 'CONFIG_MACSMC_POWER=m' .config
+              grep -qx 'CONFIG_SENSORS_MACSMC_HWMON=m' .config
+              grep -qx 'CONFIG_INPUT_MACSMC_INPUT=m' .config
               grep -qx 'CONFIG_BRCMFMAC=m' .config
               grep -qx 'CONFIG_BT=m' .config
               grep -qx 'CONFIG_BT_HCIBCM4377=m' .config
@@ -224,6 +237,11 @@ jobs:
               grep -qx 'CONFIG_MFD_MACSMC=y' .config
               grep -qx 'CONFIG_GPIO_MACSMC=y' .config
               grep -qx 'CONFIG_HID_DOCKCHANNEL=y' .config
+              grep -qx 'CONFIG_HID_APPLE=y' .config
+              grep -qx 'CONFIG_HID_MAGICMOUSE=y' .config
+              grep -qx 'CONFIG_MACSMC_POWER=y' .config
+              grep -qx 'CONFIG_SENSORS_MACSMC_HWMON=y' .config
+              grep -qx 'CONFIG_INPUT_MACSMC_INPUT=y' .config
               grep -qx 'CONFIG_BRCMFMAC=y' .config
               grep -qx 'CONFIG_RFKILL=y' .config
               grep -qx 'CONFIG_CFG80211=y' .config
