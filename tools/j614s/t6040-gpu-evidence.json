@@ -26,6 +26,12 @@
       "ref": "55f116dd0e0f28d1412c6be728a101f7d861c473",
       "path": "patches/linux-t6040-j614s-dt-v1/0002-arm64-dts-apple-add-T6040-and-J614s-MacBook-Pro.patch",
       "note": "PMGR GFX domains were generated from the J614s ADT via pmgr_adt2dt.py."
+    },
+    {
+      "repository": "damsleth/wallace",
+      "ref": "55f116dd0e0f28d1412c6be728a101f7d861c473",
+      "path": "evidence/2026-07-27-t6040-adt-ranges-address-correction.md",
+      "note": "J614s /arm-io low-window ADT child addresses require +0x200000000 translation to CPU physical addresses."
     }
   ],
   "adt": {
@@ -34,11 +40,13 @@
       "compatible": "gpu,t6040",
       "registers": [
         {
-          "base": "0x88000000",
+          "adt_bus_base": "0x88000000",
+          "cpu_physical_base": "0x288000000",
           "size": "0x03758000"
         },
         {
-          "base": "0x88d00000",
+          "adt_bus_base": "0x88d00000",
+          "cpu_physical_base": "0x288d00000",
           "size": "0x0016c000"
         }
       ],
@@ -69,11 +77,13 @@
       "compatible": "iop,ascwrap-v6",
       "registers": [
         {
-          "base": "0x8a600000",
+          "adt_bus_base": "0x8a600000",
+          "cpu_physical_base": "0x28a600000",
           "size": "0x00088000"
         },
         {
-          "base": "0x8a050000",
+          "adt_bus_base": "0x8a050000",
+          "cpu_physical_base": "0x28a050000",
           "size": "0x00060000"
         }
       ],
@@ -125,6 +135,12 @@
         "base": "0xfffffc0000000000",
         "size": "0x2000000000"
       }
+    },
+    "address_translation": {
+      "scope": "/arm-io low window",
+      "cpu_physical_delta": "0x200000000",
+      "rule": "CPU physical = raw ADT child bus address + 0x200000000",
+      "note": "Linux /soc is identity-addressed; use CPU-physical values there."
     }
   },
   "pmgr": {
