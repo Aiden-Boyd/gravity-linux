@@ -41,6 +41,8 @@ jobs:
           grep -q 'NVME_IOQ_CQES' m1n1/src/nvme.c
           grep -q 'NVMMU_TCB_DMA_FROM_DEVICE' m1n1/src/nvme.c
           grep -q 'NVMMU_TCB_DMA_TO_DEVICE' m1n1/src/nvme.c
+          grep -q 'void nvme_ensure_shutdown(void)' m1n1/src/nvme.c
+          ! grep -q 'nvme_ensure_shutdown();' m1n1/src/kboot.c
 
       - name: Build upstream reference
         run: |
@@ -55,6 +57,7 @@ jobs:
             echo "m1n1_commit=$(git -C m1n1 rev-parse HEAD)"
             echo "m1n1_bin_sha256=$(sha256sum m1n1/build/m1n1.bin | awk '{print $1}')"
             echo "gravity_branch=$GITHUB_REF_NAME"
+            echo "ans_handoff=not-wired-into-kboot-at-this-reference"
             echo "reason=This build lacks Gravity's reviewed J614s stage1 patch set and exists only to prove the current M4 NVMe source compiles."
           } | tee m1n1-nvme-reference.txt
 
