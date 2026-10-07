@@ -1,0 +1,32 @@
+// SPDX-License-Identifier: GPL-2.0+ OR MIT
+/*
+ * J614s SMC-thin bring-up target.
+ *
+ * Cumulative on PCIe/DART-thin, but with every SMC child consumer disabled.
+ * This tests the SMC mailbox + RTKit/MFD core without GPIO key writes,
+ * hwmon polling, battery, RTC, input, reboot, or endpoint power consumers.
+ */
+
+/dts-v1/;
+
+#include "t6040-j614s-pcie-dart.dts"
+
+/ {
+	model = "Apple MacBook Pro (14-inch, M4 Pro, 2024) J614s [SMC thin]";
+};
+
+&smc_mbox {
+	status = "okay";
+};
+
+&smc {
+	status = "okay";
+};
+
+&smc_gpio {
+	status = "disabled";
+};
+
+&smc_hwmon {
+	status = "disabled";
+};
