@@ -10,6 +10,7 @@ on:
       - 'tools/j614s/source_qualify.py'
       - 'tools/j614s/validate_bringup_manifest.py'
       - 'tools/j614s/build_qualified_image.sh'
+      - 'tools/j614s/artifact_qa.sh'
   workflow_dispatch:
 
 permissions:
@@ -31,6 +32,7 @@ jobs:
         run: |
           python3 -m py_compile             tools/j614s/source_qualify.py             tools/j614s/validate_bringup_manifest.py
           sh -n tools/j614s/build_qualified_image.sh
+          sh -n tools/j614s/artifact_qa.sh
           python3 tools/j614s/validate_bringup_manifest.py             tools/j614s/bringup-images.json
 
       - name: Emit immutable build matrix
@@ -204,13 +206,7 @@ jobs:
           # Re-run the hash check after adding the QA certificate.
           (
             cd "$GITHUB_WORKSPACE/out-${{ matrix.profile }}"
-            grep -v '  SHA256SUMS
-        uses: actions/upload-artifact@v4
-        with:
-          name: j614s-qualified-${{ matrix.profile }}
-          path: out-${{ matrix.profile }}/
-          if-no-files-found: error
- SHA256SUMS | sha256sum -c -
+            sha256sum -c SHA256SUMS
           )
 
       - name: Upload qualified bring-up image
