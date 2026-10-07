@@ -176,6 +176,10 @@ jobs:
           sh tools/j614s/ramboot-config.sh "$PROFILE"
           make ARCH=arm64 LLVM=1 olddefconfig
 
+          # Native T6040 GPU acceleration is not a reviewed bring-up target yet.
+          # Keep simpledrm available while preventing accidental AGX probing.
+          sh tools/j614s/gpu-audit.sh
+
           grep -qx 'CONFIG_ARM64_16K_PAGES=y' .config
           grep -qx 'CONFIG_SERIAL_SAMSUNG=y' .config
           grep -qx 'CONFIG_SERIAL_SAMSUNG_CONSOLE=y' .config
