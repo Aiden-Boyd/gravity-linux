@@ -5,6 +5,7 @@ on:
     branches:
       - j614s-ramboot-test-v1
       - j614s-first-boot-v1
+      - j614s-gpu-prep-v1
   workflow_dispatch:
 
 permissions:
