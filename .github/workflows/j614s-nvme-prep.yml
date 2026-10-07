@@ -1,0 +1,83 @@
+name: J614s NVMe Prep Audit
+
+on:
+  push:
+    branches:
+      - j614s-nvme-prep-v1
+    paths:
+      - '.github/workflows/j614s-nvme-prep.yml'
+      - 'drivers/soc/apple/sart.c'
+      - 'Documentation/devicetree/bindings/iommu/apple,sart.yaml'
+      - 'drivers/nvme/host/apple.c'
+      - 'tools/j614s/NVME_BRINGUP.md'
+      - 'tools/j614s/nvme-audit.sh'
+      - 'tools/j614s/t6040-nvme-evidence.json'
+      - 'arch/arm64/boot/dts/apple/t6040*.dts'
+      - 'arch/arm64/boot/dts/apple/t6040*.dtsi'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  static-audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate evidence and fail-closed policy
+        run: |
+          sh -n tools/j614s/nvme-audit.sh
+          sh tools/j614s/nvme-audit.sh
+
+          python3 - <<'PY'
+          import json
+
+          d = json.load(open("tools/j614s/t6040-nvme-evidence.json"))
+          assert d["status"] == "prep-only"
+          assert d["machine"] == {"model":"Mac16,8","board":"J614s","soc":"T6040"}
+          assert d["safety"]["auto_probe_internal_nvme"] is False
+          assert d["safety"]["default_dt_must_keep_storage_disabled"] is True
+
+          delta = int(d["adt"]["address_translation"]["cpu_physical_delta"], 0)
+          for section in ("asc_control", "mailbox", "nvmmu_reg3"):
+              reg = d["adt"]["ans"][section]
+              assert int(reg["adt_bus_base"], 0) + delta == int(reg["cpu_physical_base"], 0)
+          sart = d["adt"]["sart"]["entries"]
+          assert int(sart["adt_bus_base"], 0) + delta == int(sart["cpu_physical_base"], 0)
+
+          assert d["adt"]["ans"]["mailbox"]["interrupts_raw_adt"] == [1531,1530,1533,1532]
+          assert d["adt"]["ans"]["mailbox"]["linux_mailbox_semantic_order"] == [1530,1531,1532,1533]
+          assert d["adt"]["ans"]["nvme_irq"] == 2583
+          assert d["known_working_boundary"]["linux_experimental"]["not_proven_safe_for_normal_io"] is True
+          assert d["gravity_current_driver_contract"]["explicit_t6040_compatible_present"] is False
+          assert d["gravity_current_driver_contract"]["separate_nvmmu_named_resource_present"] is False
+          PY
+
+          ! grep -R -E 'apple,t6040-nvme-ans2|nvme@44dcc0000|ans_nvme:'             arch/arm64/boot/dts/apple/t6040*.dts             arch/arm64/boot/dts/apple/t6040*.dtsi
+
+      - name: Compile CoastGuard SART and Apple NVMe objects
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends             bc bison build-essential clang flex gcc-aarch64-linux-gnu             libelf-dev libssl-dev lld llvm make
+
+          make ARCH=arm64 LLVM=1 defconfig
+          scripts/config --module CONFIG_APPLE_SART
+          scripts/config --module CONFIG_NVME_APPLE
+          make ARCH=arm64 LLVM=1 olddefconfig
+
+          make -j"$(nproc)" ARCH=arm64 LLVM=1             drivers/soc/apple/sart.o             drivers/nvme/host/apple.o
+
+          test -s drivers/soc/apple/sart.o
+          test -s drivers/nvme/host/apple.o
+
+      - name: Source-level CoastGuard invariants
+        run: |
+          grep -q 'compatible = "apple,t8140-sart"' drivers/soc/apple/sart.c
+          grep -q 'APPLE_SART_POWER_ACTIVE' drivers/soc/apple/sart.c
+          grep -q 'APPLE_SART_POWER_INACTIVE' drivers/soc/apple/sart.c
+          grep -q 'APPLE_SART_POWER_DELAY_US.*100' drivers/soc/apple/sart.c
+          grep -q 'sart_scan_entries(sart);' drivers/soc/apple/sart.c
+          grep -q 'if (!sart->ops->power_managed)' drivers/soc/apple/sart.c
+          grep -q 'const: apple,t8140-sart' Documentation/devicetree/bindings/iommu/apple,sart.yaml
