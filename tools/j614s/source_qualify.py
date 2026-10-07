@@ -105,6 +105,29 @@ def global_checks(root: pathlib.Path, profile: dict) -> None:
     for marker in ("broken_wfi = true", "wfe_mode = true", "refusing to disable WFE mode"):
         assert_contains(patch, marker, f"required M4 stage1 safety marker missing: {marker}")
 
+    # The RAM boot userspace may mount only virtual/pseudo filesystems
+    # automatically. Persistent block devices stay untouched until a human
+    # explicitly chooses a subsystem test.
+    shell_init = text(root / "tools/j614s/ramboot-shell-init.sh")
+    shell_mounts = re.findall(r"(?m)^mount\\s+-t\\s+([A-Za-z0-9_-]+)", shell_init)
+    allowed_mounts = {"proc", "sysfs", "devtmpfs", "tmpfs"}
+    if set(shell_mounts) - allowed_mounts:
+        die(f"shell init auto-mounts unexpected filesystem types: {shell_mounts}")
+    for marker in ("/dev/nvme", "/dev/mmcblk", "/dev/sd"):
+        assert_not_contains(shell_init, marker,
+                            f"shell init references persistent block path {marker}")
+
+    safe_init = text(root / "tools/j614s/ramboot-init.c")
+    c_mounts = re.findall(
+        r'mount\\("[^"]+",\\s*"[^"]+",\\s*"([^"]+)"',
+        safe_init,
+    )
+    if set(c_mounts) - {"proc", "sysfs", "devtmpfs"}:
+        die(f"safe init auto-mounts unexpected filesystem types: {c_mounts}")
+    for marker in ("/dev/nvme", "/dev/mmcblk", "/dev/sd"):
+        assert_not_contains(safe_init, marker,
+                            f"safe init references persistent block path {marker}")
+
 
 def check_minimal_config_source(root: pathlib.Path) -> str:
     cfg = text(root / "tools/j614s/ramboot-config.sh")
@@ -164,6 +187,7 @@ def profile_checks(root: pathlib.Path, profile: dict) -> None:
         assert_contains(cfg, "enable CONFIG_SMP", "SMP-thin source does not explicitly enable SMP")
         audit = text(root / "tools/j614s/smp-audit.sh")
         assert_contains(audit, "maxcpus=14", "SMP audit no longer enforces 14-CPU candidate")
+        run("sh", "tools/j614s/smp-audit.sh", cwd=root)
         wf = text(root / ".github/workflows/j614s-smp-thin.yml")
         for marker in ("maxcpus=14", "idle=nop", "arm64.nowfxt"):
             assert_contains(wf, marker, f"SMP workflow lost required boot argument {marker}")
