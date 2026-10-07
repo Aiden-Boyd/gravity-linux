@@ -10,7 +10,7 @@ on:
       - tools/j614s/m1n1/patch-v1.9.9-j614s.py
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build-stage1:
@@ -87,3 +87,59 @@ jobs:
             m1n1-stage1-v1.9.9-j614s.4.sha256
             m1n1-j614s-v1.9.9.diff
           if-no-files-found: error
+
+      - name: Publish and repin reviewed stage1
+        shell: bash
+        run: |
+          set -euo pipefail
+          EXPECTED_SHA="29c9ac4542577e88e58734075d069835afac1a6b4db8b16b7aa7000942196411"
+          EXPECTED_SIZE="3866624"
+          ACTUAL_SHA="$(sha256sum m1n1/build/m1n1.bin | awk '{print $1}')"
+          ACTUAL_SIZE="$(wc -c < m1n1/build/m1n1.bin | tr -d '[:space:]')"
+          test "$ACTUAL_SHA" = "$EXPECTED_SHA"
+          test "$ACTUAL_SIZE" = "$EXPECTED_SIZE"
+          strings m1n1/build/m1n1.bin | grep -Fq 'chosen.asahi,m1n1-stage1-version=v1.9.9-j614s.4'
+
+          DEST="gravity/tools/j614s/m1n1/m1n1-v1.9.9-j614s.4-chainloading.bin"
+          cp m1n1/build/m1n1.bin "$DEST"
+          cp m1n1-stage1-v1.9.9-j614s.4.sha256 gravity/tools/j614s/m1n1/
+
+          git -C gravity config user.name "github-actions[bot]"
+          git -C gravity config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C gravity add tools/j614s/m1n1/m1n1-v1.9.9-j614s.4-chainloading.bin tools/j614s/m1n1/m1n1-stage1-v1.9.9-j614s.4.sha256
+          git -C gravity commit -m "j614s: publish reproducible m1n1 stage1 v1.9.9-j614s.4"
+          BIN_COMMIT="$(git -C gravity rev-parse HEAD)"
+
+          export BIN_COMMIT EXPECTED_SHA EXPECTED_SIZE
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          p = Path("gravity/tools/j614s/installer/bootstrap.sh")
+          s = p.read_text()
+          replacements = {
+              'EXPECTED_M1N1_VERSION="v1.9.9-j614s.1"':
+                  'EXPECTED_M1N1_VERSION="v1.9.9-j614s.4"',
+              'M1N1_STAGE1_REPO_COMMIT="a853472376b58b794637b43a9f34dc1ae76a7daa"':
+                  f'M1N1_STAGE1_REPO_COMMIT="{os.environ["BIN_COMMIT"]}"',
+              'tools/j614s/m1n1/m1n1-v1.9.9-j614s-chainloading.bin':
+                  'tools/j614s/m1n1/m1n1-v1.9.9-j614s.4-chainloading.bin',
+              'M1N1_STAGE1_SHA256="40e9510d539fb539f09c1b944ab3d1c23f2d7f8ed604e1c200bedf5564249499"':
+                  f'M1N1_STAGE1_SHA256="{os.environ["EXPECTED_SHA"]}"',
+              'M1N1_STAGE1_SIZE="3866624"':
+                  f'M1N1_STAGE1_SIZE="{os.environ["EXPECTED_SIZE"]}"',
+              '# Fail closed while the guarded .2 stage1 is being reproducibly rebuilt and\n# pinned. Read-only --probe/--deep-probe remain available.\nSTAGE1_REPIN_PENDING=1':
+                  '# Reproducible guarded .4 stage1 is pinned to the exact publishing commit.\nSTAGE1_REPIN_PENDING=0',
+              'fail "stage1 v1.9.9-j614s.2 repin is pending; normal install is intentionally blocked"':
+                  'fail "stage1 repin is pending; normal install is intentionally blocked"',
+          }
+          for old, new in replacements.items():
+              if old not in s:
+                  raise SystemExit(f"missing bootstrap repin anchor: {old}")
+              s = s.replace(old, new, 1)
+          p.write_text(s)
+          PY
+
+          git -C gravity add tools/j614s/installer/bootstrap.sh
+          git -C gravity commit -m "j614s: repin installer to m1n1 stage1 v1.9.9-j614s.4"
+          git -C gravity push origin HEAD:j614s-first-boot-v1
