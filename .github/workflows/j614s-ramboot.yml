@@ -119,7 +119,10 @@ jobs:
 
           # Candidate .2 is being rebuilt and repinned. Until its immutable
           # hash is committed, normal install mode must fail closed.
-          grep -q '^STAGE1_REPIN_PENDING=1
+          grep -q "^STAGE1_REPIN_PENDING=1$" tools/j614s/installer/bootstrap.sh
+          grep -q "stage1 v1.9.9-j614s.2 repin is pending" tools/j614s/installer/bootstrap.sh
+          ! grep -q "m1n1-stage2-v1.9.9" tools/j614s/installer/bootstrap.sh
+
       - name: Install build dependencies
         run: |
           sudo apt-get update
