@@ -36,12 +36,22 @@ done
 ! grep -q 'pci17a0' "$DTS" || fail "thin PCIe DTS must not describe SD endpoint"
 
 CFG=tools/j614s/ramboot-config.sh
-grep -q 'pcie-dart-thin)' "$CFG" || fail "missing pcie-dart-thin config case"
-for sym in CONFIG_PINCTRL_APPLE_GPIO CONFIG_APPLE_DART CONFIG_PCIE_APPLE; do
-    grep -q "enable $sym" "$CFG" || fail "$sym is not enabled"
-done
-for sym in CONFIG_MFD_MACSMC CONFIG_BRCMFMAC CONFIG_BT CONFIG_MMC CONFIG_NVME_APPLE CONFIG_USB; do
-    grep -q "disable $sym" "$CFG" || fail "$sym is not disabled"
-done
+python3 - "$CFG" <<'PY'
+import re, sys
+text = open(sys.argv[1]).read()
+m = re.search(r"(?ms)^pcie-dart-thin\)\n(.*?)^\s*;;", text)
+assert m, "missing pcie-dart-thin config case"
+block = m.group(1)
+for sym in ("CONFIG_PINCTRL_APPLE_GPIO", "CONFIG_APPLE_DART", "CONFIG_PCIE_APPLE"):
+    assert f"enable {sym}" in block, f"{sym} is not enabled in pcie-dart-thin"
+for sym in ("CONFIG_MFD_MACSMC", "CONFIG_BRCMFMAC", "CONFIG_BT",
+            "CONFIG_MMC", "CONFIG_NVME_APPLE", "CONFIG_USB"):
+    assert f"disable {sym}" in block, f"{sym} is not disabled in pcie-dart-thin"
+PY
+
+grep -q 't6040_pcie_requested' tools/j614s/m1n1/patch-v1.9.9-j614s.py ||
+    fail "stage1 target-DT PCIe gate missing"
+grep -q 't6040-j614s-pcie-dart.dtb' arch/arm64/boot/dts/apple/Makefile ||
+    fail "PCIe/DART thin DTB not listed in Apple DT Makefile"
 
 echo "J614s PCIe/DART-thin source audit passed."
