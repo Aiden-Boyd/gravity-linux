@@ -91,6 +91,28 @@ jobs:
           grep -q 'gpu,t6040' tools/j614s/gpu-audit.sh
           grep -q 'apple,agx-t6040' tools/j614s/gpu-audit.sh
 
+          # Behavioral guard tests: a fake native GPU node and an enabled
+          # DRM_ASAHI config must both fail closed; the explicit developer
+          # override is the only accepted bypass.
+          audit_fixture="$(mktemp -d)"
+          mkdir -p "$audit_fixture/drivers/gpu/drm" "$audit_fixture/arch/arm64/boot/dts/apple"
+          printf 'VERSION = 7\nPATCHLEVEL = 1\nSUBLEVEL = 13\n' > "$audit_fixture/Makefile"
+          printf '/ { soc { gpu@288000000 { compatible = "gpu,t6040"; }; }; };\n' \
+            > "$audit_fixture/arch/arm64/boot/dts/apple/t6040-fixture.dtsi"
+          if sh tools/j614s/gpu-audit.sh "$audit_fixture"; then
+            echo "GPU audit unexpectedly accepted a fake T6040 node" >&2
+            exit 1
+          fi
+          J614S_ALLOW_EXPERIMENTAL_GPU=1 sh tools/j614s/gpu-audit.sh "$audit_fixture"
+
+          rm "$audit_fixture/arch/arm64/boot/dts/apple/t6040-fixture.dtsi"
+          printf 'CONFIG_DRM_ASAHI=y\n' > "$audit_fixture/.config"
+          if sh tools/j614s/gpu-audit.sh "$audit_fixture"; then
+            echo "GPU audit unexpectedly accepted CONFIG_DRM_ASAHI=y" >&2
+            exit 1
+          fi
+          rm -rf "$audit_fixture"
+
           grep -q 'ps_gpx: power-controller@0' arch/arm64/boot/dts/apple/t6040-pmgr.dtsi
           grep -q 'ps_afr: power-controller@100' arch/arm64/boot/dts/apple/t6040-pmgr.dtsi
           grep -q 'ps_gfx: power-controller@110' arch/arm64/boot/dts/apple/t6040-pmgr.dtsi
