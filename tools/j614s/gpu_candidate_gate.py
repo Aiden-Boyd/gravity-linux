@@ -13,7 +13,6 @@ import argparse
 import json
 import pathlib
 import re
-import sys
 from dataclasses import dataclass, asdict
 
 
@@ -83,8 +82,7 @@ def check_m1n1(root: pathlib.Path) -> list[Check]:
 
     explicit_soc = bool(re.search(r"\bcase\s+T6040\s*:", body))
     explicit_gen = bool(
-        re.search(r"\bG16\b", gpu_text)
-        or re.search(r"GpuGen\s*::\s*G16", gpu_text)
+        re.search(r"GpuGen\s*::\s*G16", gpu_text)
         or re.search(r"\bG16\s*=\s*16\b", gpu_text)
     )
 
@@ -108,13 +106,10 @@ def check_m1n1(root: pathlib.Path) -> list[Check]:
 
 def check_linux(root: pathlib.Path) -> list[Check]:
     drm = tree_text(root, "drivers/gpu/drm/asahi")
-    dt = tree_text(root, "arch/arm64/boot/dts/apple")
-    all_text = drm + "\n" + dt
-
     compat = "apple,agx-t6040" in drm
     gen = bool(
-        re.search(r"\bG16\b", drm)
-        or re.search(r"GpuGen\s*::\s*G16", drm)
+        re.search(r"GpuGen\s*::\s*G16", drm)
+        or re.search(r"\bG16\s*=\s*16\b", drm)
         or re.search(r"\bAGX2\b", drm)
     )
 
@@ -157,9 +152,10 @@ def check_linux(root: pathlib.Path) -> list[Check]:
 def check_mesa(root: pathlib.Path) -> list[Check]:
     asahi = tree_text(root, "src/asahi")
     explicit = bool(
-        re.search(r"\bG16\b", asahi)
-        or re.search(r"AGX_CHIP_G16", asahi)
+        re.search(r"AGX_CHIP_G16", asahi)
+        or re.search(r"AGX[_A-Z0-9]*G16", asahi)
         or re.search(r"\bAGX2\b", asahi)
+        or re.search(r"\bG16\s*=\s*16\b", asahi)
     )
     return [
         Check(
@@ -202,13 +198,31 @@ def check_contract(path: pathlib.Path | None) -> list[Check]:
         if not data.get(key)
         or (isinstance(data.get(key), str) and data.get(key).startswith("REPLACE_"))
     ]
+
+    bad_commits = []
+    for key in ("m1n1_commit", "linux_commit", "mesa_commit"):
+        value = data.get(key, "")
+        if value and not value.startswith("REPLACE_") and not re.fullmatch(r"[0-9a-fA-F]{40,64}", value):
+            bad_commits.append(key)
+
+    bad_compat = bool(data.get("dt_compatible")) and data.get("dt_compatible") != "apple,agx-t6040"
+    passed = not missing and not bad_commits and not bad_compat
+
+    problems = []
+    if missing:
+        problems.append("missing/placeholder fields: " + ", ".join(missing))
+    if bad_commits:
+        problems.append("non-immutable commit IDs: " + ", ".join(bad_commits))
+    if bad_compat:
+        problems.append("dt_compatible must be apple,agx-t6040")
+
     return [
         Check(
             "contract",
             "candidate test contract supplied",
-            not missing,
-            "Required contract fields are present."
-            if not missing else "Missing fields: " + ", ".join(missing),
+            passed,
+            "Required contract fields and immutable source IDs are present."
+            if passed else "; ".join(problems),
         )
     ]
 
