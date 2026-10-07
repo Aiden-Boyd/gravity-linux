@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: MIT
-"""Read-only T6040/J614s GPU ADT inventory collector.
+"""T6040/J614s GPU ADT inventory collector.
 
-No GPU power enable, GPU/ASC MMIO access, firmware start, NVRAM write, or
-persistent-storage write is performed. The script only parses an ADT file or
-retrieves the already-present ADT through an m1n1 proxy connection.
+The collector is GPU-read-only: it does not enable GPU power, access GPU/ASC
+MMIO, start firmware, write NVRAM, or write persistent storage. Offline mode
+only parses a captured ADT. Live mode uses m1n1's proxy helpers, which may
+allocate transient proxy scratch/heap memory while retrieving the existing ADT.
 """
 
 import argparse
@@ -168,7 +169,7 @@ def main():
     src = parser.add_mutually_exclusive_group(required=True)
     src.add_argument("--adt", type=pathlib.Path, help="captured Apple ADT file")
     src.add_argument("--live", action="store_true",
-                     help="read the current ADT through an m1n1 proxy connection")
+                     help="retrieve the current ADT through m1n1; GPU MMIO/power remain untouched")
     parser.add_argument("--m1n1", type=pathlib.Path, required=True,
                         help="path to an m1n1 source checkout")
     parser.add_argument("-o", "--output", type=pathlib.Path,
@@ -196,7 +197,8 @@ def main():
     report = {
         "schema_version": 1,
         "safety": {
-            "read_only_inventory": True,
+            "gpu_read_only_inventory": True,
+            "proxy_may_allocate_transient_memory": bool(args.live),
             "powers_gpu": False,
             "reads_gpu_mmio": False,
             "writes_gpu_mmio": False,
