@@ -129,6 +129,20 @@ edit("src/kboot.c",
     dapf_init_all();
 """)
 
+# v1.9.9's ISP init has no T6040 register/revision case, but it powers the
+# ADT ISP domain before discovering that. No current J614s target DT exposes
+# ISP, so avoid an unnecessary unsupported hardware transition entirely.
+edit("src/kboot.c",
+"""    /* Need to init ISP early to carve out heap */
+    isp_init();
+""",
+"""    /* Need to init ISP early to carve out heap on supported SoCs. */
+    if (chip_id == T6040)
+        printf("isp: skipping unsupported T6040 init during J614s bring-up\\n");
+    else
+        isp_init();
+""")
+
 # T6040 DAPF: only dart-mtp is hardware-verified safe/required.
 edit("src/dapf.c",
 """struct entry {
