@@ -55,8 +55,18 @@
         "adt_bus_base": "0x209608000",
         "cpu_physical_base": "0x409608000",
         "size": "0x4000",
-        "interrupts_raw_adt": [1531, 1530, 1533, 1532],
-        "linux_mailbox_semantic_order": [1530, 1531, 1532, 1533]
+        "interrupts_raw_adt": [
+          1531,
+          1530,
+          1533,
+          1532
+        ],
+        "linux_mailbox_semantic_order": [
+          1530,
+          1531,
+          1532,
+          1533
+        ]
       },
       "nvmmu_reg3": {
         "adt_bus_base": "0x20dcc0000",
@@ -90,7 +100,10 @@
   },
   "pmgr": {
     "ans": "ps_ans",
-    "storage_system_domains": ["ps_apcie_sys_st0", "ps_apcie_sys_st1"],
+    "storage_system_domains": [
+      "ps_apcie_sys_st0",
+      "ps_apcie_sys_st1"
+    ],
     "storage_phy_switch": "ps_apcie_phy_sw",
     "notes": [
       "ps_apcie_sys_st0 and ps_apcie_sys_st1 each depend on ps_ans plus their storage PCIe domain.",
@@ -114,13 +127,15 @@
     "t8132_compatible_present": true,
     "t8132_extra_ioq_registers_present": true,
     "explicit_t6040_compatible_present": false,
-    "separate_nvmmu_named_resource_present": false,
-    "decision": "Do not create or enable a live T6040 NVMe node until the exact T6040 resource contract is reviewed."
+    "separate_nvmmu_named_resource_present": true,
+    "decision": "Keep T6040 NVMe gated until an explicit compatible/binding and the known Linux CQ-wrap issue are reviewed.",
+    "separate_nvmmu_behavior": "Optional named nvmmu aperture is used for NVMMU and linear-SQ accesses; existing device trees continue to alias NVMMU to the nvme aperture.",
+    "binding_for_explicit_t6040_candidate_present": false
   },
   "admission_blockers": [
-    "No explicit apple,t6040-nvme-ans2 match in Gravity's current driver.",
-    "T6040 evidence distinguishes reg[3] NVMMU and reg[9] NVMe controller apertures while Gravity's current driver maps one named nvme resource for both.",
-    "Linux experimental T6040 sustained I/O still has a known first-CQ-wrap firmware failure.",
-    "Default and YOLO DTs must not probe internal NVMe until the above are resolved."
+    "No explicit apple,t6040-nvme-ans2 match/binding exists in Gravity yet.",
+    "A T6040 candidate must explicitly carry the proven reg3 NVMMU and reg9 controller contract.",
+    "Experimental Linux T6040 sustained I/O still has a known first-CQ-wrap firmware failure.",
+    "Normal J614s device trees must keep internal NVMe gated until those issues are resolved."
   ]
 }
