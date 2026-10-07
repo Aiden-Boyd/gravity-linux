@@ -16,6 +16,7 @@ on:
       - 'tools/j614s/gpu-candidate-contract.example.json'
       - 'tools/j614s/gpu-upstream-status-*.json'
       - 'tools/j614s/test_gpu_candidate_gate.py'
+      - 'tools/j614s/test_gpu_collector.py'
       - 'arch/arm64/boot/dts/apple/t6040*.dts'
       - 'arch/arm64/boot/dts/apple/t6040*.dtsi'
   workflow_dispatch:
@@ -35,8 +36,11 @@ jobs:
           python3 -m py_compile \
             tools/j614s/m1n1/collect-gpu-adt.py \
             tools/j614s/gpu_candidate_gate.py \
-            tools/j614s/test_gpu_candidate_gate.py
-          PYTHONPATH=tools/j614s python3 -m unittest -v tools/j614s/test_gpu_candidate_gate.py
+            tools/j614s/test_gpu_candidate_gate.py \
+            tools/j614s/test_gpu_collector.py
+          PYTHONPATH=tools/j614s python3 -m unittest -v \
+            tools/j614s/test_gpu_candidate_gate.py \
+            tools/j614s/test_gpu_collector.py
           sh -n tools/j614s/gpu-audit.sh
           sh tools/j614s/gpu-audit.sh
 
