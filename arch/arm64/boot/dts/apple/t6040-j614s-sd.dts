@@ -1,0 +1,49 @@
+// SPDX-License-Identifier: GPL-2.0+ OR MIT
+/*
+ * J614s SD isolated bring-up target.
+ *
+ * Cumulative on SMC-thin. Enables only SMC GPIO + PCIe port01 and measured
+ * gP19 for the GL9755 reader. BCM4388/gP13 remains disabled.
+ */
+
+/dts-v1/;
+
+#include "t6040-j614s-smc.dts"
+
+/ {
+	model = "Apple MacBook Pro (14-inch, M4 Pro, 2024) J614s [SD isolated]";
+
+	aliases {
+		mmc0 = &sdhci0;
+	};
+};
+
+&smc_gpio {
+	status = "okay";
+};
+
+&port00 {
+	status = "disabled";
+};
+
+&port01 {
+	pwren-gpios = <&smc_gpio 0x19 GPIO_ACTIVE_HIGH>;
+	max-link-speed = <1>;
+	bus-range = <2 2>;
+	status = "okay";
+
+	sdhci0: mmc@0,0 {
+		compatible = "pci17a0,9755";
+		reg = <0x20000 0x0 0x0 0x0 0x0>;
+		cd-inverted;
+		wp-inverted;
+	};
+};
+
+&port02 {
+	status = "disabled";
+};
+
+&port03 {
+	status = "disabled";
+};
