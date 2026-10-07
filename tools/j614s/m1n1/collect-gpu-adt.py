@@ -61,14 +61,23 @@ def plain(value):
 
 
 def translated_regs(node):
+    """Return raw ADT bus and translated CPU-physical ranges side-by-side."""
     regs = getattr(node, "reg", None)
     if not isinstance(regs, list):
         return []
     out = []
-    for idx in range(len(regs)):
+    for idx, raw in enumerate(regs):
         try:
             addr, size = node.get_reg(idx)
-            out.append({"index": idx, "base": addr, "size": size})
+            raw_addr = getattr(raw, "addr", None)
+            raw_size = getattr(raw, "size", None)
+            out.append({
+                "index": idx,
+                "adt_bus_base": hex(raw_addr) if isinstance(raw_addr, int) else plain(raw_addr),
+                "adt_size": hex(raw_size) if isinstance(raw_size, int) else plain(raw_size),
+                "cpu_physical_base": hex(addr),
+                "size": hex(size),
+            })
         except Exception as exc:
             out.append({"index": idx, "error": str(exc)})
     return out
@@ -82,7 +91,7 @@ def node_snapshot(node, selected_props=None):
     return {
         "path": node._path,
         "name": node.name,
-        "regs_translated": translated_regs(node),
+        "registers": translated_regs(node),
         "properties": plain(props),
     }
 
