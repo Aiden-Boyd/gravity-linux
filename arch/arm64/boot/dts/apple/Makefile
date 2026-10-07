@@ -88,6 +88,7 @@ dtb-$(CONFIG_ARCH_APPLE) += t6002-j375d.dtb
 dtb-$(CONFIG_ARCH_APPLE) += t6022-j180d.dtb
 dtb-$(CONFIG_ARCH_APPLE) += t6040-j614s.dtb
 dtb-$(CONFIG_ARCH_APPLE) += t6040-j614s-all.dtb
+dtb-$(CONFIG_ARCH_APPLE) += t6040-j614s-pcie-dart.dtb
 dtb-$(CONFIG_ARCH_APPLE) += t6020-j414s.dtb
 dtb-$(CONFIG_ARCH_APPLE) += t6021-j414c.dtb
 dtb-$(CONFIG_ARCH_APPLE) += t6020-j416s.dtb
