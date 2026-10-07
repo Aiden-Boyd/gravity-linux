@@ -4,7 +4,7 @@
 
 set -eu
 
-PROFILE=${1:?usage: ramboot-config.sh safe|diagnostic|yolo|smp-thin}
+PROFILE=${1:?usage: ramboot-config.sh safe|diagnostic|yolo|smp-thin|input-thin}
 CFG=scripts/config
 
 enable() { "$CFG" --enable "$1"; }
@@ -41,6 +41,31 @@ safe|smp-thin)
 	disable CONFIG_WLAN
 	disable CONFIG_BT
 	disable CONFIG_MMC
+	disable CONFIG_USB
+	;;
+
+input-thin)
+	enable CONFIG_MODULES
+	enable CONFIG_PM
+	enable CONFIG_INPUT
+	enable CONFIG_HID_SUPPORT
+	enable CONFIG_HID
+	module CONFIG_APPLE_MAILBOX
+	module CONFIG_APPLE_RTKIT
+	module CONFIG_APPLE_RTKIT_HELPER
+	module CONFIG_APPLE_DART
+	module CONFIG_APPLE_DOCKCHANNEL
+	module CONFIG_HID_DOCKCHANNEL
+	module CONFIG_HID_APPLE
+	module CONFIG_HID_MAGICMOUSE
+	disable CONFIG_PCIE_APPLE
+	disable CONFIG_MFD_MACSMC
+	disable CONFIG_BRCMFMAC
+	disable CONFIG_WLAN
+	disable CONFIG_BT
+	disable CONFIG_MMC
+	disable CONFIG_NVME_APPLE
+	disable CONFIG_BLK_DEV_NVME
 	disable CONFIG_USB
 	;;
 
