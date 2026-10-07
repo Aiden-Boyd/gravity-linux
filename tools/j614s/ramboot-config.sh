@@ -4,7 +4,7 @@
 
 set -eu
 
-PROFILE=${1:?usage: ramboot-config.sh safe|diagnostic|yolo|smp-thin|pcie-dart-thin}
+PROFILE=${1:?usage: ramboot-config.sh safe|diagnostic|yolo|smp-thin|pcie-dart-thin|smc-thin}
 CFG=scripts/config
 
 enable() { "$CFG" --enable "$1"; }
@@ -58,6 +58,37 @@ pcie-dart-thin)
 	disable CONFIG_NVME_APPLE
 	disable CONFIG_BLK_DEV_NVME
 	disable CONFIG_MFD_MACSMC
+	disable CONFIG_APPLE_DOCKCHANNEL
+	disable CONFIG_HID_DOCKCHANNEL
+	disable CONFIG_BRCMFMAC
+	disable CONFIG_WLAN
+	disable CONFIG_BT
+	disable CONFIG_MMC
+	disable CONFIG_USB
+	;;
+
+smc-thin)
+	# Add the SMC transport/MFD core only. Every child consumer and endpoint
+	# power path stays disabled for this stage.
+	enable CONFIG_PM
+	enable CONFIG_PCI
+	enable CONFIG_PCI_MSI
+	enable CONFIG_IOMMU_SUPPORT
+	enable CONFIG_PINCTRL
+	enable CONFIG_PINCTRL_APPLE_GPIO
+	enable CONFIG_APPLE_DART
+	enable CONFIG_PCIE_APPLE
+	enable CONFIG_APPLE_MAILBOX
+	enable CONFIG_APPLE_RTKIT
+	enable CONFIG_MFD_MACSMC
+	disable CONFIG_GPIO_MACSMC
+	disable CONFIG_SENSORS_MACSMC_HWMON
+	disable CONFIG_MACSMC_POWER
+	disable CONFIG_INPUT_MACSMC_INPUT
+	disable CONFIG_RTC_DRV_MACSMC
+	disable CONFIG_POWER_RESET_MACSMC
+	disable CONFIG_NVME_APPLE
+	disable CONFIG_BLK_DEV_NVME
 	disable CONFIG_APPLE_DOCKCHANNEL
 	disable CONFIG_HID_DOCKCHANNEL
 	disable CONFIG_BRCMFMAC
