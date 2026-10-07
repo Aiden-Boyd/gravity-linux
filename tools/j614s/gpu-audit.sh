@@ -30,7 +30,9 @@ if grep -RqsE 'config[[:space:]]+DRM_ASAHI|CONFIG_DRM_ASAHI' drivers/gpu/drm 2>/
   has_symbol=1
 fi
 
-if grep -RqsE '(^|[[:space:]])gpu@|apple,(agx|gpu)'     arch/arm64/boot/dts/apple/t6040*.dts     arch/arm64/boot/dts/apple/t6040*.dtsi 2>/dev/null; then
+if grep -RqsE '(^|[[:space:]])gpu@|apple,(agx|gpu)|apple,agx-t6040|gpu,t6040' \
+    arch/arm64/boot/dts/apple/t6040*.dts \
+    arch/arm64/boot/dts/apple/t6040*.dtsi 2>/dev/null; then
   has_t6040_node=1
 fi
 
