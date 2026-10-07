@@ -4,7 +4,7 @@
 
 set -eu
 
-PROFILE=${1:?usage: ramboot-config.sh safe|diagnostic|yolo}
+PROFILE=${1:?usage: ramboot-config.sh safe|diagnostic|yolo|smp-thin}
 CFG=scripts/config
 
 enable() { "$CFG" --enable "$1"; }
@@ -25,10 +25,11 @@ enable CONFIG_KALLSYMS
 enable CONFIG_PROC_FS
 enable CONFIG_SYSFS
 enable CONFIG_TMPFS
+enable CONFIG_SMP
 
 case "$PROFILE" in
-safe)
-	# Known-minimum rescue baseline. Do not probe DMA/storage/peripheral fabric.
+safe|smp-thin)
+	# Known-minimum rescue/SMP baseline. Do not probe DMA/storage/peripheral fabric.
 	disable CONFIG_NVME_APPLE
 	disable CONFIG_BLK_DEV_NVME
 	disable CONFIG_PCIE_APPLE
