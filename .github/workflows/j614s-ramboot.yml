@@ -48,6 +48,7 @@ jobs:
           grep -q 't6040_features' m1n1/src/cpufreq.c
           grep -q 't6040_pcie_requested' m1n1/src/kboot.c
           grep -q 'T6040 disabled by target DT; leaving PCIe untouched' m1n1/src/kboot.c
+          grep -q 'skipping unsupported T6040 init during J614s bring-up' m1n1/src/kboot.c
           grep -q 'APCIE_PHY_CTRL_RESET_T8132 BIT(4)' m1n1/src/pcie.c
           git -C m1n1 diff --check
           git -C m1n1 diff > m1n1-j614s-v1.9.9.diff
@@ -55,7 +56,7 @@ jobs:
       - name: Build stage1 twice reproducibly
         env:
           RUSTUP_TOOLCHAIN: 1.98.1
-          M1N1_VERSION_TAG: v1.9.9-j614s.3
+          M1N1_VERSION_TAG: v1.9.9-j614s.4
         run: |
           make -C m1n1 ARCH=aarch64-linux-gnu- RELEASE=1 CHAINLOADING=1 -j2
           cp m1n1/build/m1n1.bin /tmp/m1n1-first.bin
@@ -67,12 +68,12 @@ jobs:
           SHA="$(sha256sum m1n1/build/m1n1.bin | awk '{print $1}')"
           printf 'candidate-size=%s\ncandidate-sha256=%s\n' "$SIZE" "$SHA"
           printf '%s  %s\n' "$SHA" "m1n1.bin" | tee m1n1-j614s-v1.9.9.sha256
-          strings m1n1/build/m1n1.bin | grep -Fq 'chosen.asahi,m1n1-stage1-version=v1.9.9-j614s.3'
+          strings m1n1/build/m1n1.bin | grep -Fq 'chosen.asahi,m1n1-stage1-version=v1.9.9-j614s.4'
 
       - name: Upload patched stage1 candidate
         uses: actions/upload-artifact@v4
         with:
-          name: m1n1-stage1-v1.9.9-j614s.3-candidate
+          name: m1n1-stage1-v1.9.9-j614s.4-candidate
           path: |
             m1n1/build/m1n1.bin
             m1n1-j614s-v1.9.9.sha256
