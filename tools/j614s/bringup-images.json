@@ -1,0 +1,157 @@
+{
+  "schema_version": 1,
+  "machine": {
+    "model": "Mac16,8",
+    "board": "J614s",
+    "soc": "T6040"
+  },
+  "policy": {
+    "source_qualification_required_before_build": true,
+    "build_from_immutable_commit_only": true,
+    "moving_branch_heads_forbidden_as_build_inputs": true,
+    "blocked_profiles_must_not_build": true,
+    "hardware_test_order_is_not_proof_of_source_quality": true
+  },
+  "profiles": [
+    {
+      "id": "safe",
+      "order": 10,
+      "purpose": "Minimal one-CPU UART/RAM baseline",
+      "source_branch": "j614s-first-boot-v1",
+      "source_commit": "12845e504209b054bd04391c47e1733fd7b38f20",
+      "source_gate": "safe",
+      "build_enabled": true,
+      "boot_after": [],
+      "risk": "lowest"
+    },
+    {
+      "id": "smp-thin",
+      "order": 20,
+      "purpose": "Isolated 14-CPU CPU/memory/interrupt test with platform endpoints disabled",
+      "source_branch": "j614s-smp-prep-v1",
+      "source_commit": "ce26bb010a0807499002126407b5ab7422576ea7",
+      "source_gate": "smp-thin",
+      "build_enabled": true,
+      "boot_after": ["safe"],
+      "risk": "experimental"
+    },
+    {
+      "id": "pcie-dart-thin",
+      "order": 30,
+      "purpose": "PCIe + DART enumeration without endpoint power-up",
+      "source_branch": null,
+      "source_commit": null,
+      "source_gate": "pcie-dart-thin",
+      "build_enabled": false,
+      "blocked_reason": "Dedicated isolated source profile has not been authored and qualified yet.",
+      "boot_after": ["smp-thin"],
+      "risk": "experimental"
+    },
+    {
+      "id": "smc-thin",
+      "order": 40,
+      "purpose": "SMC/RTKit bring-up without PCIe endpoint power consumers",
+      "source_branch": null,
+      "source_commit": null,
+      "source_gate": "smc-thin",
+      "build_enabled": false,
+      "blocked_reason": "Dedicated isolated source profile has not been authored and qualified yet.",
+      "boot_after": ["pcie-dart-thin"],
+      "risk": "experimental"
+    },
+    {
+      "id": "wifi-bt",
+      "order": 50,
+      "purpose": "BCM4388 Wi-Fi/BT power-up and PCIe path",
+      "source_branch": null,
+      "source_commit": null,
+      "source_gate": "wifi-bt",
+      "build_enabled": false,
+      "blocked_reason": "Must isolate the gP13 power path and known high-core-count confounders first.",
+      "boot_after": ["smc-thin", "pcie-dart-thin"],
+      "risk": "high"
+    },
+    {
+      "id": "sd",
+      "order": 60,
+      "purpose": "GL9755 SD reader and gP19 power path",
+      "source_branch": null,
+      "source_commit": null,
+      "source_gate": "sd",
+      "build_enabled": false,
+      "blocked_reason": "Dedicated source profile has not been authored and qualified yet.",
+      "boot_after": ["smc-thin", "pcie-dart-thin"],
+      "risk": "experimental"
+    },
+    {
+      "id": "nvme-readonly",
+      "order": 70,
+      "purpose": "Internal ANS/SART/NVMe identify and bounded read-only diagnostics",
+      "source_branch": "j614s-nvme-prep-v1",
+      "source_commit": "e106b05925d821d48cff2a8b7698e3415ff12a3a",
+      "source_gate": "nvme-readonly",
+      "build_enabled": false,
+      "blocked_reason": "Prep branch exists, but the explicit T6040 controller/NVMMU resource contract is still gated.",
+      "boot_after": ["pcie-dart-thin", "smc-thin"],
+      "risk": "high"
+    },
+    {
+      "id": "input",
+      "order": 80,
+      "purpose": "DockChannel/MTP keyboard and trackpad",
+      "source_branch": null,
+      "source_commit": null,
+      "source_gate": "input",
+      "build_enabled": false,
+      "blocked_reason": "Needs a dedicated isolated profile instead of borrowing FULL-DIAGNOSTIC.",
+      "boot_after": ["safe"],
+      "risk": "experimental"
+    },
+    {
+      "id": "power",
+      "order": 90,
+      "purpose": "Battery, sensors, lid, RTC and cpufreq/thermal stack",
+      "source_branch": null,
+      "source_commit": null,
+      "source_gate": "power",
+      "build_enabled": false,
+      "blocked_reason": "Needs isolated SMC consumer source profile and qualification.",
+      "boot_after": ["smc-thin"],
+      "risk": "experimental"
+    },
+    {
+      "id": "full-diagnostic",
+      "order": 100,
+      "purpose": "One-CPU reviewed platform DT with hardware-facing drivers as manually loaded modules",
+      "source_branch": "j614s-first-boot-v1",
+      "source_commit": "12845e504209b054bd04391c47e1733fd7b38f20",
+      "source_gate": "diagnostic",
+      "build_enabled": true,
+      "boot_after": ["input", "power", "wifi-bt", "sd"],
+      "risk": "experimental"
+    },
+    {
+      "id": "full-yolo",
+      "order": 110,
+      "purpose": "One-CPU auto-probing integration image for subsystems already admitted",
+      "source_branch": "j614s-first-boot-v1",
+      "source_commit": "12845e504209b054bd04391c47e1733fd7b38f20",
+      "source_gate": "yolo",
+      "build_enabled": true,
+      "boot_after": ["full-diagnostic"],
+      "risk": "highest"
+    },
+    {
+      "id": "gpu-native",
+      "order": 120,
+      "purpose": "Native G16/T6040 GPU acceleration",
+      "source_branch": "j614s-gpu-prep-v1",
+      "source_commit": "1f253b34ed86cee90fe76db902e0a21275aa33f2",
+      "source_gate": "gpu-native",
+      "build_enabled": false,
+      "blocked_reason": "Asahi currently lists T604x GPU support as TBA and the explicit G16 stack is not admitted.",
+      "boot_after": ["full-diagnostic"],
+      "risk": "blocked"
+    }
+  ]
+}
