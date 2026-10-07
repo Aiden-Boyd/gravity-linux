@@ -44,16 +44,15 @@ ASAHI_INSTALLER_BASE="https://cdn.asahilinux.org/installer"
 # exact m1n1 v1.9.9 source commit. The binary was built twice byte-identically
 # in CI using RELEASE=1 CHAINLOADING=1, Rust 1.98.1, and only the reviewed
 # T6040 WFI/DAPF/log-buffer/MCC/cpufreq deltas in tools/j614s/m1n1/.
-EXPECTED_M1N1_VERSION="v1.9.9-j614s.1"
+EXPECTED_M1N1_VERSION="v1.9.9-j614s.4"
 EXPECTED_M1N1_COMMIT="809541515659bf4e504807fd72bc0a539be5eee7"
-M1N1_STAGE1_REPO_COMMIT="a853472376b58b794637b43a9f34dc1ae76a7daa"
-M1N1_STAGE1_URL="https://raw.githubusercontent.com/Aiden-Boyd/gravity-linux/$M1N1_STAGE1_REPO_COMMIT/tools/j614s/m1n1/m1n1-v1.9.9-j614s-chainloading.bin"
-M1N1_STAGE1_SHA256="40e9510d539fb539f09c1b944ab3d1c23f2d7f8ed604e1c200bedf5564249499"
+M1N1_STAGE1_REPO_COMMIT="b444f99c39e38b0c567a9741496694b130c6c693"
+M1N1_STAGE1_URL="https://raw.githubusercontent.com/Aiden-Boyd/gravity-linux/$M1N1_STAGE1_REPO_COMMIT/tools/j614s/m1n1/m1n1-v1.9.9-j614s.4-chainloading.bin"
+M1N1_STAGE1_SHA256="29c9ac4542577e88e58734075d069835afac1a6b4db8b16b7aa7000942196411"
 M1N1_STAGE1_SIZE="3866624"
 
-# Fail closed while the guarded .2 stage1 is being reproducibly rebuilt and
-# pinned. Read-only --probe/--deep-probe remain available.
-STAGE1_REPIN_PENDING=1
+# Reproducible guarded .4 stage1 is pinned to the exact publishing commit.
+STAGE1_REPIN_PENDING=0
 
 IPSW_TOOL_VERSION="3.1.730"
 IPSW_TOOL_ARCHIVE="ipsw_3.1.730_macOS_arm64.tar.gz"
@@ -73,7 +72,7 @@ echo "Wi-Fi, Bluetooth, SD, USB, or other experimental J614s hardware."
 echo
 
 if [ "$MODE" = "install" ] && [ "$STAGE1_REPIN_PENDING" = "1" ]; then
-    fail "stage1 v1.9.9-j614s.2 repin is pending; normal install is intentionally blocked"
+    fail "stage1 repin is pending; normal install is intentionally blocked"
 fi
 
 [ "$(uname -s)" = "Darwin" ] || fail "this bootstrap must run from macOS"
