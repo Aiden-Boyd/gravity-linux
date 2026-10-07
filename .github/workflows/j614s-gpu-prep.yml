@@ -1,0 +1,78 @@
+name: J614s GPU Prep Audit
+
+on:
+  push:
+    branches:
+      - j614s-gpu-prep-v1
+    paths:
+      - '.github/workflows/j614s-gpu-prep.yml'
+      - 'tools/j614s/GPU_BRINGUP.md'
+      - 'tools/j614s/gpu-audit.sh'
+      - 'tools/j614s/t6040-gpu-evidence.json'
+      - 'tools/j614s/m1n1/collect-gpu-adt.py'
+      - 'arch/arm64/boot/dts/apple/t6040*.dts'
+      - 'arch/arm64/boot/dts/apple/t6040*.dtsi'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  static-audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate GPU prep tooling and evidence
+        run: |
+          python3 -m py_compile tools/j614s/m1n1/collect-gpu-adt.py
+          sh -n tools/j614s/gpu-audit.sh
+          sh tools/j614s/gpu-audit.sh
+
+          python3 - <<'PY'
+          import json
+
+          path = "tools/j614s/t6040-gpu-evidence.json"
+          d = json.load(open(path))
+
+          assert d["status"] == "evidence-only"
+          assert d["machine"] == {
+              "model": "Mac16,8",
+              "board": "J614s",
+              "soc": "T6040",
+              "gpu_generation": "G16",
+          }
+          assert d["safety"]["do_not_probe"] is True
+          assert d["adt"]["sgx"]["compatible"] == "gpu,t6040"
+          assert d["adt"]["gfx_asc"]["compatible"] == "iop,ascwrap-v6"
+
+          delta = int(d["adt"]["address_translation"]["cpu_physical_delta"], 0)
+          for block in ("sgx", "gfx_asc"):
+              for reg in d["adt"][block]["registers"]:
+                  raw = int(reg["adt_bus_base"], 0)
+                  phys = int(reg["cpu_physical_base"], 0)
+                  assert raw + delta == phys, (block, reg)
+
+          assert d["adt"]["sgx"]["interrupts_raw_adt"] == [
+              1481, 1482, 1483, 1484, 1505, 1507, 1496, 1498
+          ]
+          assert d["adt"]["gfx_asc"]["interrupts_raw_adt"] == [
+              1502, 1501, 1504, 1503
+          ]
+          assert d["adt"]["gfx_asc"]["linux_mailbox_semantic_candidate"]["interrupts"] == [
+              1501, 1502, 1503, 1504
+          ]
+
+          assert d["legacy_downstream_reference"]["m1n1"]["dt_set_gpu_supported_chips"][-1] == "T6022"
+          assert "T6040" not in d["legacy_downstream_reference"]["m1n1"]["dt_set_gpu_supported_chips"]
+          assert "apple,agx-t6040" not in d["legacy_downstream_reference"]["linux_driver"]["supported_of_compatibles"]
+          PY
+
+          grep -q 'ps_gpx: power-controller@0' arch/arm64/boot/dts/apple/t6040-pmgr.dtsi
+          grep -q 'ps_afr: power-controller@100' arch/arm64/boot/dts/apple/t6040-pmgr.dtsi
+          grep -q 'ps_gfx: power-controller@110' arch/arm64/boot/dts/apple/t6040-pmgr.dtsi
+
+          # Evidence may exist under tools/, but the live Linux DT must stay
+          # GPU-free until there is an explicit T6040/G16 driver contract.
+          ! grep -R -E 'apple,agx-t6040|gpu,t6040' arch/arm64/boot/dts/apple/t6040*.dts arch/arm64/boot/dts/apple/t6040*.dtsi
