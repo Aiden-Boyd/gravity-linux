@@ -1,0 +1,184 @@
+name: J614s Qualified Bring-up Images
+
+on:
+  push:
+    branches:
+      - j614s-bringup-matrix-v1
+    paths:
+      - '.github/workflows/j614s-qualified-images.yml'
+      - 'tools/j614s/bringup-images.json'
+      - 'tools/j614s/source_qualify.py'
+      - 'tools/j614s/validate_bringup_manifest.py'
+      - 'tools/j614s/build_qualified_image.sh'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: j614s-qualified-images-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  plan:
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate matrix source
+        run: |
+          python3 -m py_compile             tools/j614s/source_qualify.py             tools/j614s/validate_bringup_manifest.py
+          sh -n tools/j614s/build_qualified_image.sh
+          python3 tools/j614s/validate_bringup_manifest.py             tools/j614s/bringup-images.json
+
+      - name: Emit immutable build matrix
+        id: plan
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          d = json.load(open("tools/j614s/bringup-images.json"))
+          rows = []
+          for p in sorted(d["profiles"], key=lambda x: x["order"]):
+              if not p.get("build_enabled"):
+                  continue
+              rows.append({
+                  "profile": p["id"],
+                  "sha": p["source_commit"],
+                  "branch": p["source_branch"],
+              })
+          print("matrix=" + json.dumps({"include": rows}, separators=(",", ":")))
+          PY
+
+  source-qualify:
+    needs: plan
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout qualification policy
+        uses: actions/checkout@v4
+        with:
+          path: matrix
+
+      - name: Checkout exact candidate source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ matrix.sha }}
+          path: candidate
+          fetch-depth: 1
+
+      - name: Prove checkout identity
+        run: |
+          test "$(git -C candidate rev-parse HEAD)" = "${{ matrix.sha }}"
+          test -z "$(git -C candidate status --porcelain)"
+
+      - name: Qualify source before any build
+        run: |
+          python3 matrix/tools/j614s/source_qualify.py             --manifest matrix/tools/j614s/bringup-images.json             --profile "${{ matrix.profile }}"             --source candidate | tee qualification.txt
+
+          grep -qx "SOURCE_QUALIFIED ${{ matrix.profile }} ${{ matrix.sha }}" qualification.txt
+
+          cat > qualification.json <<EOF
+          {
+            "profile": "${{ matrix.profile }}",
+            "source_branch": "${{ matrix.branch }}",
+            "source_commit": "${{ matrix.sha }}",
+            "policy_commit": "${{ github.sha }}",
+            "qualified": true
+          }
+          EOF
+
+      - name: Upload qualification proof
+        uses: actions/upload-artifact@v4
+        with:
+          name: source-qualified-${{ matrix.profile }}
+          path: |
+            qualification.txt
+            qualification.json
+          if-no-files-found: error
+
+  build:
+    needs:
+      - plan
+      - source-qualify
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - name: Checkout build policy
+        uses: actions/checkout@v4
+        with:
+          path: matrix
+
+      - name: Checkout the same qualified source SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ matrix.sha }}
+          path: candidate
+          fetch-depth: 1
+
+      - name: Download qualification proof
+        uses: actions/download-artifact@v4
+        with:
+          name: source-qualified-${{ matrix.profile }}
+          path: qualification
+
+      - name: Verify qualification proof binds this build
+        run: |
+          python3 - <<'PY'
+          import json
+          q = json.load(open("qualification/qualification.json"))
+          assert q["profile"] == "${{ matrix.profile }}"
+          assert q["source_commit"] == "${{ matrix.sha }}"
+          assert q["policy_commit"] == "${{ github.sha }}"
+          assert q["qualified"] is True
+          PY
+          test "$(git -C candidate rev-parse HEAD)" = "${{ matrix.sha }}"
+          test -z "$(git -C candidate status --porcelain)"
+
+      - name: Install deterministic build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends             bc bison build-essential clang cpio curl device-tree-compiler flex             gcc-aarch64-linux-gnu kmod libc6-dev-arm64-cross             libelf-dev libssl-dev lld llvm make
+
+      - name: Build only the qualified source
+        run: |
+          OUT="$GITHUB_WORKSPACE/out-${{ matrix.profile }}"
+          sh matrix/tools/j614s/build_qualified_image.sh             "${{ matrix.profile }}"             candidate             "$OUT"             "${{ matrix.sha }}"
+
+          cp qualification/qualification.json "$OUT/SOURCE_QUALIFICATION.json"
+          cp matrix/tools/j614s/bringup-images.json "$OUT/BRINGUP_IMAGE_MATRIX.json"
+
+          python3 - <<'PY'
+          import json, pathlib
+          profile = "${{ matrix.profile }}"
+          d = json.load(open("matrix/tools/j614s/bringup-images.json"))
+          p = next(x for x in d["profiles"] if x["id"] == profile)
+          pathlib.Path(f"out-{profile}/TEST_ORDER.json").write_text(
+              json.dumps({
+                  "profile": profile,
+                  "order": p["order"],
+                  "purpose": p["purpose"],
+                  "boot_after": p["boot_after"],
+                  "risk": p["risk"],
+              }, indent=2) + "\n"
+          )
+          PY
+
+          (
+            cd "$OUT"
+            rm -f SHA256SUMS
+            sha256sum * > SHA256SUMS
+          )
+
+      - name: Upload qualified bring-up image
+        uses: actions/upload-artifact@v4
+        with:
+          name: j614s-qualified-${{ matrix.profile }}
+          path: out-${{ matrix.profile }}/
+          if-no-files-found: error
