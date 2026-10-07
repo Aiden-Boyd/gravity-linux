@@ -118,12 +118,18 @@ def global_checks(root: pathlib.Path, profile: dict) -> None:
                             f"shell init references persistent block path {marker}")
 
     safe_init = text(root / "tools/j614s/ramboot-init.c")
-    c_mounts = re.findall(
-        r'mount\\("[^"]+",\\s*"[^"]+",\\s*"([^"]+)"',
-        safe_init,
+    c_mount_lines = [
+        line.strip() for line in safe_init.splitlines()
+        if line.lstrip().startswith("mount(")
+    ]
+    allowed_c_mounts = (
+        'mount("proc", "/proc", "proc",',
+        'mount("sysfs", "/sys", "sysfs",',
+        'mount("devtmpfs", "/dev", "devtmpfs",',
     )
-    if set(c_mounts) - {"proc", "sysfs", "devtmpfs"}:
-        die(f"safe init auto-mounts unexpected filesystem types: {c_mounts}")
+    for line in c_mount_lines:
+        if not line.startswith(allowed_c_mounts):
+            die(f"safe init contains unexpected automatic mount: {line}")
     for marker in ("/dev/nvme", "/dev/mmcblk", "/dev/sd"):
         assert_not_contains(safe_init, marker,
                             f"safe init references persistent block path {marker}")
