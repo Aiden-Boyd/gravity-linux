@@ -1,0 +1,200 @@
+name: J614s SMP Thin Candidate
+
+on:
+  push:
+    branches:
+      - j614s-smp-prep-v1
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: j614s-smp-thin-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  stage1:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/checkout@v4
+        with:
+          repository: AsahiLinux/m1n1
+          ref: 809541515659bf4e504807fd72bc0a539be5eee7
+          submodules: recursive
+          path: m1n1
+
+      - name: Install stage1 toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gcc-aarch64-linux-gnu
+          rustup toolchain install 1.98.1 --profile minimal
+          rustup +1.98.1 target add aarch64-unknown-none-softfloat
+
+      - name: Patch and build J614s stage1
+        env:
+          RUSTUP_TOOLCHAIN: 1.98.1
+          M1N1_VERSION_TAG: v1.9.9-j614s.4
+        run: |
+          python3 tools/j614s/m1n1/patch-v1.9.9-j614s.py m1n1
+          grep -q 'broken_wfi = true' m1n1/src/chickens.c
+          grep -q 'refusing to disable WFE mode' m1n1/src/smp.c
+          git -C m1n1 diff --check
+          make -C m1n1 ARCH=aarch64-linux-gnu- RELEASE=1 CHAINLOADING=1 -j2
+          strings m1n1/build/m1n1.bin | grep -Fq 'chosen.asahi,m1n1-stage1-version=v1.9.9-j614s.4'
+          sha256sum m1n1/build/m1n1.bin > m1n1-stage1.sha256
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: j614s-smp-thin-stage1
+          path: |
+            m1n1/build/m1n1.bin
+            m1n1-stage1.sha256
+          if-no-files-found: error
+
+  kernel:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Install kernel and initramfs dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            bc bison build-essential clang cpio curl device-tree-compiler flex \
+            gcc-aarch64-linux-gnu libc6-dev-arm64-cross libelf-dev libssl-dev \
+            lld llvm make
+
+          BUSYBOX_VERSION=1.38.0
+          cd /tmp
+          curl -fsSLO "https://busybox.net/downloads/busybox-$BUSYBOX_VERSION.tar.bz2"
+          curl -fsSLO "https://busybox.net/downloads/busybox-$BUSYBOX_VERSION.tar.bz2.sha256"
+          sha256sum -c "busybox-$BUSYBOX_VERSION.tar.bz2.sha256"
+          tar xjf "busybox-$BUSYBOX_VERSION.tar.bz2"
+          cd "busybox-$BUSYBOX_VERSION"
+          make CROSS_COMPILE=aarch64-linux-gnu- defconfig
+          sed -i 's/# CONFIG_STATIC is not set/CONFIG_STATIC=y/' .config
+          sed -i 's/CONFIG_TC=y/# CONFIG_TC is not set/' .config
+          yes "" | make CROSS_COMPILE=aarch64-linux-gnu- oldconfig >/dev/null
+          make -j"$(nproc)" CROSS_COMPILE=aarch64-linux-gnu- busybox
+          mkdir -p /tmp/busybox-arm64/bin
+          cp busybox /tmp/busybox-arm64/bin/busybox
+          readelf -h /tmp/busybox-arm64/bin/busybox | grep -q 'Machine:.*AArch64'
+
+      - name: Validate SMP assumptions
+        run: |
+          sh -n tools/j614s/ramboot-config.sh
+          sh -n tools/j614s/ramboot-diag.sh
+          grep -q 'broken_wfi' tools/j614s/m1n1/patch-v1.9.9-j614s.py
+          grep -q 'wfe_mode = true' tools/j614s/m1n1/patch-v1.9.9-j614s.py
+          grep -q 'cpu_p05_disabled: cpu@10105' arch/arm64/boot/dts/apple/t6040.dtsi
+
+          python3 - <<'PY'
+          import re
+          text = open("arch/arm64/boot/dts/apple/t6040.dtsi").read()
+          active = re.findall(r"\bcpu_(?:e[0-3]|p(?:0[0-4]|1[0-4])):\s*cpu@", text)
+          assert len(active) == 14, len(active)
+          assert 'cpu_p05_disabled: cpu@10105' in text
+          PY
+
+      - name: Configure minimal SMP kernel
+        run: |
+          make ARCH=arm64 LLVM=1 defconfig
+          sh tools/j614s/ramboot-config.sh smp-thin
+          make ARCH=arm64 LLVM=1 olddefconfig
+
+          grep -qx 'CONFIG_SMP=y' .config
+          grep -qx 'CONFIG_ARM64_16K_PAGES=y' .config
+          grep -qx 'CONFIG_SERIAL_SAMSUNG=y' .config
+          grep -qx 'CONFIG_SERIAL_SAMSUNG_CONSOLE=y' .config
+
+          if grep -Eq '^CONFIG_(NVME_APPLE|BLK_DEV_NVME|PCIE_APPLE|APPLE_DART|MFD_MACSMC|APPLE_DOCKCHANNEL|HID_DOCKCHANNEL|BRCMFMAC|BT_HCIBCM4377|WLAN|BT|MMC|USB)=[ym]$' .config; then
+            echo "SMP-thin unexpectedly enabled a platform confounder" >&2
+            grep -E '^CONFIG_(NVME_APPLE|BLK_DEV_NVME|PCIE_APPLE|APPLE_DART|MFD_MACSMC|APPLE_DOCKCHANNEL|HID_DOCKCHANNEL|BRCMFMAC|BT_HCIBCM4377|WLAN|BT|MMC|USB)=' .config >&2 || true
+            exit 1
+          fi
+
+      - name: Build kernel and thin DT
+        run: |
+          make -j"$(nproc)" ARCH=arm64 LLVM=1 \
+            Image apple/t6040-j614s.dtb
+          gzip -n -9 -c arch/arm64/boot/Image > Image.gz
+
+          DTB=arch/arm64/boot/dts/apple/t6040-j614s.dtb
+          test -s "$DTB"
+          test "$(fdtget -t s "$DTB" /soc/pcie@1cb0000000 status)" = disabled
+          test "$(fdtget -t s "$DTB" /soc/smc@50c600000 status)" = disabled
+          test "$(fdtget -t s "$DTB" /cpus/cpu@10105 status)" = disabled
+
+      - name: Build RAM-only SMP initramfs
+        run: |
+          rm -rf ramroot
+          mkdir -p ramroot/{proc,sys,dev,etc,bin,sbin,run,tmp}
+          cp /tmp/busybox-arm64/bin/busybox ramroot/bin/busybox
+          chmod 0755 ramroot/bin/busybox
+          cp tools/j614s/ramboot-diag.sh ramroot/bin/j614s-diag
+          chmod 0755 ramroot/bin/j614s-diag
+          cp tools/j614s/ramboot-shell-init.sh ramroot/init
+          chmod 0755 ramroot/init
+          printf '%s\n' smp-thin > ramroot/etc/j614s-profile
+
+          (
+            cd ramroot
+            find . -print0 | sort -z | cpio --null -o --format=newc
+          ) | gzip -n -9 > initramfs-j614s-smp-thin.cpio.gz
+
+      - name: Stage SMP-thin bundle
+        run: |
+          OUT=j614s-ramboot-smp-thin
+          mkdir -p "$OUT"
+          cp Image.gz "$OUT/"
+          cp initramfs-j614s-smp-thin.cpio.gz "$OUT/initramfs.cpio.gz"
+          cp .config "$OUT/kernel.config"
+          cp arch/arm64/boot/dts/apple/t6040-j614s.dtb "$OUT/t6040-j614s.dtb"
+          cp tools/j614s/tethered-boot.sh "$OUT/BOOT_FROM_HOST.sh"
+          cp tools/j614s/SMP_BRINGUP.md "$OUT/SMP_BRINGUP.md"
+          chmod 0755 "$OUT/BOOT_FROM_HOST.sh"
+
+          cat > "$OUT/BOOTARGS.txt" <<'EOF'
+          earlycon=apple,s5l-uart console=ttySAC0,1500000 keep_bootcon ignore_loglevel loglevel=8 rdinit=/init panic=0 idle=nop arm64.nowfxt maxcpus=14
+          EOF
+
+          for arg in panic=0 idle=nop arm64.nowfxt maxcpus=14; do
+            grep -qw "$arg" "$OUT/BOOTARGS.txt"
+          done
+          ! grep -qw 'nr_cpus=1' "$OUT/BOOTARGS.txt"
+          ! grep -qw 'maxcpus=1' "$OUT/BOOTARGS.txt"
+
+          cat > "$OUT/README.txt" <<'EOF'
+          J614s SMP-THIN is a RAM-only 14-CPU diagnostic candidate.
+
+          It intentionally uses the minimal J614s DT and disables platform
+          drivers that previously confounded SMP testing: SMC, PCIe, Wi-Fi/BT,
+          SD, NVMe, USB and DockChannel HID.
+
+          M4 WFI is still treated as unsafe. The bundle keeps idle=nop and
+          arm64.nowfxt, while the paired m1n1 candidate parks secondaries in WFE.
+
+          First shell checks:
+            j614s-diag smp
+            dmesg | grep -E 'smp:|Booted secondary|SMP: Total'
+            cat /sys/devices/system/cpu/online
+
+          This candidate is for CPU/memory bring-up only, not daily-driver use.
+          EOF
+
+          sha256sum "$OUT"/* > "$OUT/SHA256SUMS"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: j614s-ramboot-smp-thin
+          path: j614s-ramboot-smp-thin/
+          if-no-files-found: error
