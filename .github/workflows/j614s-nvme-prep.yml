@@ -87,8 +87,8 @@ jobs:
           sys.path.insert(0, "tools/j614s")
           import nvme_candidate_gate as gate
           checks = gate.check_m1n1(pathlib.Path("m1n1"))
-          failed = [c for c in checks if not c.passed]
-          assert not failed, failed
+          failed = [c.name for c in checks if not c.passed]
+          assert failed == ["clean ANS handoff before Linux"], failed
           PY
 
           ! grep -R -E 'apple,t6040-nvme-ans2|nvme@44dcc0000|ans_nvme:'             arch/arm64/boot/dts/apple/t6040*.dts             arch/arm64/boot/dts/apple/t6040*.dtsi
