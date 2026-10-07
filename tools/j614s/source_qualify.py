@@ -131,12 +131,12 @@ def profile_checks(root: pathlib.Path, profile: dict) -> None:
 
     elif gate == "diagnostic":
         for marker in (
-            "enable_m CONFIG_APPLE_DART",
-            "enable_m CONFIG_PCIE_APPLE",
-            "enable_m CONFIG_MFD_MACSMC",
-            "enable_m CONFIG_BRCMFMAC",
-            "enable_m CONFIG_BT_HCIBCM4377",
-            "enable_m CONFIG_MMC_SDHCI_PCI",
+            "module CONFIG_APPLE_DART",
+            "module CONFIG_PCIE_APPLE",
+            "module CONFIG_MFD_MACSMC",
+            "module CONFIG_BRCMFMAC",
+            "module CONFIG_BT_HCIBCM4377",
+            "module CONFIG_MMC_SDHCI_PCI",
         ):
             assert_contains(cfg, marker, f"diagnostic source missing {marker}")
         for marker in (
@@ -149,12 +149,12 @@ def profile_checks(root: pathlib.Path, profile: dict) -> None:
 
     elif gate == "yolo":
         for marker in (
-            "enable_y CONFIG_APPLE_DART",
-            "enable_y CONFIG_PCIE_APPLE",
-            "enable_y CONFIG_MFD_MACSMC",
-            "enable_y CONFIG_BRCMFMAC",
-            "enable_y CONFIG_BT_HCIBCM4377",
-            "enable_y CONFIG_MMC_SDHCI_PCI",
+            "enable CONFIG_APPLE_DART",
+            "enable CONFIG_PCIE_APPLE",
+            "enable CONFIG_MFD_MACSMC",
+            "enable CONFIG_BRCMFMAC",
+            "enable CONFIG_BT_HCIBCM4377",
+            "enable CONFIG_MMC_SDHCI_PCI",
         ):
             assert_contains(cfg, marker, f"YOLO source missing {marker}")
 
