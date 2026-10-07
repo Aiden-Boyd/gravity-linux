@@ -73,7 +73,7 @@ jobs:
           assert d["adt"]["ans"]["nvme_irq"] == 2583
           assert d["known_working_boundary"]["linux_experimental"]["not_proven_safe_for_normal_io"] is True
           assert d["gravity_current_driver_contract"]["explicit_t6040_compatible_present"] is False
-          assert d["gravity_current_driver_contract"]["separate_nvmmu_named_resource_present"] is False
+          assert d["gravity_current_driver_contract"]["separate_nvmmu_named_resource_present"] is True
 
           s = json.load(open("tools/j614s/t6040-nvme-node-skeleton.json"))
           assert s["compile_into_normal_dtb"] is False
@@ -117,3 +117,7 @@ jobs:
           grep -q 'sart_scan_entries(sart);' drivers/soc/apple/sart.c
           grep -q 'if (!sart->ops->power_managed)' drivers/soc/apple/sart.c
           grep -q 'const: apple,t8140-sart' Documentation/devicetree/bindings/iommu/apple,sart.yaml
+          grep -q 'void __iomem \*mmio_nvmmu;' drivers/nvme/host/apple.c
+          grep -q 'devm_platform_ioremap_resource_byname(pdev, "nvmmu")' drivers/nvme/host/apple.c
+          grep -q 'adminq.sq_db = anv->mmio_nvmmu' drivers/nvme/host/apple.c
+          grep -q 'ioq.sq_db = anv->mmio_nvmmu' drivers/nvme/host/apple.c
