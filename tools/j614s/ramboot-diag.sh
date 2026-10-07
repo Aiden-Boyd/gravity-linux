@@ -9,7 +9,7 @@ set -u
 
 usage()
 {
-    echo "usage: j614s-diag report|smc|battery|sensors|lid|input|cpufreq|pcie|sd|wifi|bt" >&2
+    echo "usage: j614s-diag report|smp|smc|battery|sensors|lid|input|cpufreq|pcie|sd|wifi|bt" >&2
     exit 2
 }
 
@@ -39,6 +39,34 @@ show_pci()
             "$(basename "$(readlink "$d/driver" 2>/dev/null)" 2>/dev/null)"
     done
     [ "$found" -eq 1 ] || echo "(none)"
+}
+
+
+show_smp()
+{
+    echo "--- SMP ---"
+    printf "possible: "; cat /sys/devices/system/cpu/possible 2>/dev/null || echo "?"
+    printf "present:  "; cat /sys/devices/system/cpu/present 2>/dev/null || echo "?"
+    printf "online:   "; cat /sys/devices/system/cpu/online 2>/dev/null || echo "?"
+    grep -E '^processor|^CPU implementer|^CPU part' /proc/cpuinfo 2>/dev/null || true
+    echo "--- per-CPU scheduler counters ---"
+    grep -E '^cpu[0-9]+ ' /proc/stat 2>/dev/null || true
+
+    if command -v taskset >/dev/null 2>&1; then
+        echo "--- pinned task smoke ---"
+        for path in /sys/devices/system/cpu/cpu[0-9]*; do
+            [ -d "$path" ] || continue
+            cpu=${path##*cpu}
+            [ "$cpu" = "0" ] || [ "$(cat "$path/online" 2>/dev/null || echo 0)" = "1" ] || continue
+            if taskset -c "$cpu" sh -c 'echo "cpu=$1 pid=$"' sh "$cpu"; then
+                :
+            else
+                echo "cpu=$cpu taskset=FAIL"
+            fi
+        done
+    else
+        echo "(taskset unavailable; skipped pinned-task smoke)"
+    fi
 }
 
 show_state()
@@ -102,6 +130,9 @@ cmd="${1:-}"
 case "$cmd" in
 report)
     show_state
+    ;;
+smp)
+    show_smp
     ;;
 smc)
     load_smc || exit $?
