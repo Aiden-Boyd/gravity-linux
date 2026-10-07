@@ -92,6 +92,8 @@ jobs:
       - name: Validate SMP assumptions
         run: |
           sh -n tools/j614s/ramboot-config.sh
+          sh tools/j614s/smp-audit.sh
+          sh -n tools/j614s/ramboot-config.sh
           sh -n tools/j614s/ramboot-diag.sh
           grep -q 'broken_wfi' tools/j614s/m1n1/patch-v1.9.9-j614s.py
           grep -q 'wfe_mode = true' tools/j614s/m1n1/patch-v1.9.9-j614s.py
