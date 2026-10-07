@@ -1,0 +1,58 @@
+// SPDX-License-Identifier: GPL-2.0+ OR MIT
+/*
+ * J614s Wi-Fi/Bluetooth isolated bring-up target.
+ *
+ * Cumulative on SMC-thin. Enables only the SMC GPIO child and PCIe port00,
+ * driving measured gP13 for the BCM4388 module. SD/gP19 remains disabled.
+ */
+
+/dts-v1/;
+
+#include "t6040-j614s-smc.dts"
+
+/ {
+	model = "Apple MacBook Pro (14-inch, M4 Pro, 2024) J614s [Wi-Fi/BT isolated]";
+
+	aliases {
+		wifi0 = &wifi0;
+		bluetooth0 = &bluetooth0;
+	};
+};
+
+&smc_gpio {
+	status = "okay";
+};
+
+&port00 {
+	pwren-gpios = <&smc_gpio 0x13 GPIO_ACTIVE_HIGH>;
+	max-link-speed = <2>;
+	bus-range = <1 1>;
+	status = "okay";
+
+	wifi0: wifi@0,0 {
+		compatible = "pci14e4,4434";
+		reg = <0x10000 0x0 0x0 0x0 0x0>;
+		local-mac-address = [00 00 00 00 00 00];
+		apple,antenna-sku = "X3";
+		brcm,board-type = "apple,mriya";
+	};
+
+	bluetooth0: bluetooth@0,1 {
+		compatible = "pci14e4,5f72";
+		reg = <0x10100 0x0 0x0 0x0 0x0>;
+		local-bd-address = [00 00 00 00 00 00];
+		brcm,board-type = "apple,mriya";
+	};
+};
+
+&port01 {
+	status = "disabled";
+};
+
+&port02 {
+	status = "disabled";
+};
+
+&port03 {
+	status = "disabled";
+};
