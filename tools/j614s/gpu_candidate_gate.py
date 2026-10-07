@@ -111,7 +111,7 @@ def check_linux(root: pathlib.Path) -> list[Check]:
     dt = tree_text(root, "arch/arm64/boot/dts/apple")
     all_text = drm + "\n" + dt
 
-    compat = "apple,agx-t6040" in all_text
+    compat = "apple,agx-t6040" in drm
     gen = bool(
         re.search(r"\bG16\b", drm)
         or re.search(r"GpuGen\s*::\s*G16", drm)
@@ -197,7 +197,11 @@ def check_contract(path: pathlib.Path | None) -> list[Check]:
         "linux_commit",
         "mesa_commit",
     )
-    missing = [key for key in required if not data.get(key)]
+    missing = [
+        key for key in required
+        if not data.get(key)
+        or (isinstance(data.get(key), str) and data.get(key).startswith("REPLACE_"))
+    ]
     return [
         Check(
             "contract",
