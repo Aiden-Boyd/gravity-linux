@@ -40,12 +40,16 @@ Wallace J614s ADT capture/reduction at commit
 Proven facts, kept as raw inventory rather than a speculative Linux node:
 
 - `/arm-io/sgx` is `gpu,t6040`.
-- SGX exposes two ADT ranges:
+- SGX exposes two raw ADT bus ranges:
   `0x88000000/0x03758000` and `0x88d00000/0x0016c000`.
+  J614s `/arm-io/ranges` adds `0x200000000`, so their CPU-physical
+  candidates are `0x288000000` and `0x288d00000` respectively.
 - SGX carries IRQs `1481, 1482, 1483, 1484, 1505, 1507, 1496, 1498`.
 - `/arm-io/gfx-asc` is `iop,ascwrap-v6`.
-- gfx-asc exposes two ADT ranges:
+- gfx-asc exposes two raw ADT bus ranges:
   `0x8a600000/0x00088000` and `0x8a050000/0x00060000`.
+  After the same `+0x200000000` translation, the CPU-physical candidates
+  are `0x28a600000` and `0x28a050000`.
 - gfx-asc's raw ADT IRQ order is `1502, 1501, 1504, 1503`. The J614s ASC
   convention strongly derives the Linux mailbox semantic order as
   `1501, 1502, 1503, 1504`, but that remains explicitly marked
@@ -63,8 +67,9 @@ The macOS 26.5.2 (25F84) evidence identifies the firmware generation as G16
 
 ### What is intentionally still unresolved
 
-The raw ADT has **two SGX ranges and two gfx-asc ranges**, while the current
-downstream G13/G14 Linux driver consumes named `sgx` and `asc` resources.
+The raw ADT has **two SGX ranges and two gfx-asc ranges** (with the Linux
+CPU-physical translations recorded separately), while the current downstream
+G13/G14 Linux driver consumes named `sgx` and `asc` resources.
 We will not guess which T6040 ranges should be collapsed, split, or exposed.
 That mapping belongs to an explicit G16 driver contract.
 
