@@ -1,0 +1,82 @@
+name: J614s T6040 RVBAR Candidate (No Publish)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - j614s-rvbar-handoff-guard
+    paths:
+      - .github/workflows/j614s-rvbar-candidate.yml
+      - tools/j614s/m1n1/patch-v1.9.9-j614s.py
+
+permissions:
+  contents: read
+
+jobs:
+  candidate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout candidate Gravity branch (never production)
+        uses: actions/checkout@v4
+        with:
+          path: gravity
+          persist-credentials: false
+
+      - name: Checkout pinned upstream m1n1
+        uses: actions/checkout@v4
+        with:
+          repository: AsahiLinux/m1n1
+          ref: 809541515659bf4e504807fd72bc0a539be5eee7
+          submodules: recursive
+          path: m1n1
+          persist-credentials: false
+
+      - name: Install pinned compiler
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu
+          rustup toolchain install 1.98.1 --profile minimal
+          rustup default 1.98.1
+          rustup target add --toolchain 1.98.1 aarch64-unknown-none-softfloat
+          rustc --version | grep -Fq 'rustc 1.98.1'
+
+      - name: Apply candidate patch and audit forbidden side effects
+        run: |
+          set -euo pipefail
+          test "$(git -C m1n1 rev-parse HEAD)" = "809541515659bf4e504807fd72bc0a539be5eee7"
+          python3 gravity/tools/j614s/m1n1/patch-v1.9.9-j614s.py m1n1
+          grep -Fq 'T6040 preserving boot CPU RVBAR' m1n1/src/smp.c
+          grep -Fq 'if (chip_id == T6040)' m1n1/src/smp.c
+          grep -Fq '.broken_wfi = true' m1n1/src/chickens.c
+          git -C m1n1 diff --check
+          # This candidate changes only m1n1 sources; installer/bootstrap stay pinned.
+          git -C m1n1 diff > candidate-m1n1-source.diff
+          ! git -C gravity diff --quiet -- tools/j614s/installer/bootstrap.sh || {
+            echo 'Unexpected bootstrap modification'; exit 1;
+          }
+
+      - name: Reproducibly compile candidate twice
+        env:
+          M1N1_VERSION_TAG: v1.9.9-j614s.4-rvbar-candidate
+        run: |
+          set -euo pipefail
+          make -C m1n1 -j2 ARCH=aarch64-linux-gnu- RELEASE=1 CHAINLOADING=1
+          cp m1n1/build/m1n1.bin /tmp/m1n1-rvbar-first.bin
+          make -C m1n1 clean
+          make -C m1n1 -j2 ARCH=aarch64-linux-gnu- RELEASE=1 CHAINLOADING=1
+          cmp /tmp/m1n1-rvbar-first.bin m1n1/build/m1n1.bin
+          sha256sum m1n1/build/m1n1.bin
+          test "$(sha256sum m1n1/build/m1n1.bin | cut -d' ' -f1)" != \
+            "29c9ac4542577e88e58734075d069835afac1a6b4db8b16b7aa7000942196411"
+          strings m1n1/build/m1n1.bin | grep -Fq 'T6040 preserving boot CPU RVBAR'
+
+      - name: Preserve candidate artifact (NEVER install/publish automatically)
+        uses: actions/upload-artifact@v4
+        with:
+          name: j614s-rvbar-candidate-unverified
+          path: |
+            m1n1/build/m1n1.bin
+            m1n1/build/build_cfg.h
+            candidate-m1n1-source.diff
+          if-no-files-found: error
