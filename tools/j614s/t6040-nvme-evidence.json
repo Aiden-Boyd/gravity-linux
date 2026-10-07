@@ -1,0 +1,126 @@
+{
+  "schema_version": 1,
+  "status": "prep-only",
+  "machine": {
+    "model": "Mac16,8",
+    "board": "J614s",
+    "soc": "T6040"
+  },
+  "safety": {
+    "auto_probe_internal_nvme": false,
+    "mount_internal_nvme": false,
+    "write_internal_nvme": false,
+    "format_internal_nvme": false,
+    "fsck_internal_nvme": false,
+    "default_dt_must_keep_storage_disabled": true
+  },
+  "provenance": [
+    {
+      "repository": "damsleth/wallace",
+      "ref": "55f116dd0e0f28d1412c6be728a101f7d861c473",
+      "paths": [
+        "evidence/2026-07-13-t6040-nvme-map.md",
+        "evidence/2026-07-30-t6040-NVME-READ-WORKS.md",
+        "evidence/2026-07-30-t6040-nvme-linux-wrap-assert-E1-E5.md",
+        "evidence/2026-08-03-t6040-nvme-E11-tag2-review.md",
+        "evidence/2026-08-03-t6040-nvme-ansf-assert-7454-re.md",
+        "evidence/2026-08-03-t6040-nvme-irq-completion-order-audit.md"
+      ]
+    },
+    {
+      "repository": "AsahiLinux/m1n1",
+      "ref": "2460b604c6f016956ead711823605eea840c602e",
+      "relevant_commits": {
+        "t8132_support": "53f8ee9b54ba52b7f87e607e8206a8c827f06b04",
+        "tcb_opcode_zero": "0e77db5bf051274362bdf18540caa0f258aaac66",
+        "dma_direction": "b0cdce107543235c8a83c616a0d12aae4c5fc248",
+        "drop_prp_null_chicken": "1aead9e78af0096d4dd2203ae73ec10556c8b26e",
+        "new_fw_single_block_read": "34925643ca627a95b193b43632fae09e270b175e"
+      }
+    }
+  ],
+  "adt": {
+    "address_translation": {
+      "scope": "/arm-io low window",
+      "cpu_physical_delta": "0x200000000"
+    },
+    "ans": {
+      "path": "/arm-io/ans",
+      "asc_control": {
+        "adt_bus_base": "0x209600000",
+        "cpu_physical_base": "0x409600000",
+        "size": "0x4000"
+      },
+      "mailbox": {
+        "adt_bus_base": "0x209608000",
+        "cpu_physical_base": "0x409608000",
+        "size": "0x4000",
+        "interrupts_raw_adt": [1531, 1530, 1533, 1532],
+        "linux_mailbox_semantic_order": [1530, 1531, 1532, 1533]
+      },
+      "nvmmu_reg3": {
+        "adt_bus_base": "0x20dcc0000",
+        "cpu_physical_base": "0x40dcc0000",
+        "size": "0x60000"
+      },
+      "nvme_reg9": {
+        "cpu_physical_base": "0x44dcc0000",
+        "adt_role": "M4+ NVMe controller aperture",
+        "size": "0x10000"
+      },
+      "nvme_irq": 2583
+    },
+    "sart": {
+      "path": "/arm-io/sart-ans",
+      "version": 3,
+      "entries": {
+        "adt_bus_base": "0x20dc50000",
+        "cpu_physical_base": "0x40dc50000",
+        "size": "0xc000"
+      },
+      "coastguard_power_control": {
+        "provider_adt_bus_base": "0x20dcc0000",
+        "offset": "0x13e8",
+        "cpu_physical_address": "0x40dcc13e8",
+        "active_value": 0,
+        "inactive_value": 1,
+        "settle_delay_us": 100
+      }
+    }
+  },
+  "pmgr": {
+    "ans": "ps_ans",
+    "storage_system_domains": ["ps_apcie_sys_st0", "ps_apcie_sys_st1"],
+    "storage_phy_switch": "ps_apcie_phy_sw",
+    "notes": [
+      "ps_apcie_sys_st0 and ps_apcie_sys_st1 each depend on ps_ans plus their storage PCIe domain.",
+      "ps_apcie_phy_sw depends on both storage system domains."
+    ]
+  },
+  "known_working_boundary": {
+    "m1n1": {
+      "result": "real internal SSD read demonstrated",
+      "controller_base": "0x44dcc0000",
+      "proof": "LBA 1 returned an EFI PART GPT header in the retained Wallace evidence",
+      "writes_used": false
+    },
+    "linux_experimental": {
+      "result": "controller boot, namespace enumeration and GPT partition scan demonstrated",
+      "known_failure": "first Linux I/O completion-queue wrap can trigger ANS firmware assert 7454",
+      "not_proven_safe_for_normal_io": true
+    }
+  },
+  "gravity_current_driver_contract": {
+    "t8132_compatible_present": true,
+    "t8132_extra_ioq_registers_present": true,
+    "explicit_t6040_compatible_present": false,
+    "separate_nvmmu_named_resource_present": false,
+    "decision": "Do not create or enable a live T6040 NVMe node until the exact T6040 resource contract is reviewed."
+  },
+  "admission_blockers": [
+    "No explicit apple,t6040-nvme-ans2 match in Gravity's current driver.",
+    "T6040 evidence distinguishes reg[3] NVMMU and reg[9] NVMe controller apertures while Gravity's current driver maps one named nvme resource for both.",
+    "Linux experimental T6040 sustained I/O still has a known first-CQ-wrap firmware failure.",
+    "Default and YOLO DTs must not probe internal NVMe until the above are resolved."
+  ]
+}
