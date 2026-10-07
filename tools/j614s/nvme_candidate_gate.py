@@ -29,11 +29,21 @@ def check_linux(root):
     m4_ioq = all(x in apple for x in ("APPLE_ANS_T8132_IOQ_CMDS","APPLE_ANS_T8132_IOQ_CQES","needs_ioq_register"))
     split = bool(re.search(r'\bmmio_nvmmu\b|\bnvmmu_base\b|resource_byname[^\n]*"nvmmu"', apple))
     coastguard = all(x in sart for x in ("apple,t8140-sart","APPLE_SART_POWER_ACTIVE","APPLE_SART_POWER_INACTIVE","sart_scan_entries"))
+    fw_abi = (
+        "apple,firmware-abi" in apple
+        or "firmware_managed_queues" in apple
+    )
+    queue_count_gated = (
+        "nvme_set_queue_count(&anv->ctrl" not in apple
+        or bool(re.search(r"if\s*\([^\n]*(?:firmware|queue_abi)[^\n]*\)[\s\S]{0,500}nvme_set_queue_count", apple))
+    )
     return [
         Check("linux","explicit T6040 ANS2 compatible",t6040,"found" if t6040 else "missing"),
         Check("linux","M4 IOQ setup",m4_ioq,"present" if m4_ioq else "incomplete"),
         Check("linux","explicit T6040 NVMMU aperture",split,"present" if split else "missing"),
         Check("linux","CoastGuard SART lifecycle",coastguard,"present" if coastguard else "incomplete"),
+        Check("linux","explicit firmware queue ABI gate",fw_abi,"present" if fw_abi else "missing"),
+        Check("linux","Number-of-Queues command is ABI-gated",queue_count_gated,"gated" if queue_count_gated else "legacy command remains unconditional"),
     ]
 
 def check_m1n1(root):
