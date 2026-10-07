@@ -133,13 +133,13 @@ TMP_LIST=$(mktemp)
 trap 'rm -f "$TMP_LIST"' EXIT
 gzip -dc "$OUT/initramfs.cpio.gz" | cpio -it 2>/dev/null > "$TMP_LIST" ||
     fail "cannot enumerate initramfs"
-grep -qx './init' "$TMP_LIST" || fail "initramfs lacks /init"
+grep -Eq '^(\./)?init$' "$TMP_LIST" || fail "initramfs lacks /init"
 
 if [ "$PROFILE" = safe ]; then
-    ! grep -qx './bin/busybox' "$TMP_LIST" || fail "SAFE unexpectedly contains BusyBox"
+    ! grep -Eq '^(\./)?bin/busybox$' "$TMP_LIST" || fail "SAFE unexpectedly contains BusyBox"
 else
-    grep -qx './bin/busybox' "$TMP_LIST" || fail "interactive image lacks BusyBox"
-    grep -qx './bin/j614s-diag' "$TMP_LIST" || fail "interactive image lacks j614s-diag"
+    grep -Eq '^(\./)?bin/busybox$' "$TMP_LIST" || fail "interactive image lacks BusyBox"
+    grep -Eq '^(\./)?bin/j614s-diag$' "$TMP_LIST" || fail "interactive image lacks j614s-diag"
 fi
 
 # Final DTB isolation checks.
