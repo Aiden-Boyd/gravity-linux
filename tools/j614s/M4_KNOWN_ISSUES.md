@@ -59,8 +59,11 @@ than every experiment ticket. It is a bring-up ledger, not a support promise.
   avoids all driver accesses to the firmware-locked guest-timer FIQ control
   and ICH_HCR_EL2 registers. This extends the Project Wallace bring-up patch
   from only the init writes to the later IRQ/FIQ mask/handler paths as well.
-- **MTP ASC mailbox interrupt order:** corrected to the exact J614s ADT order
-  `793, 792, 795, 794` (non-empty interrupt first in each ASC pair).
+- **MTP ASC mailbox interrupt mapping:** the J614s ADT stores the four lines as
+  `793, 792, 795, 794` (not-empty first in each pair), but the Linux mailbox
+  binding names them `send-empty, send-not-empty, recv-empty, recv-not-empty`.
+  The DTS therefore uses the hardware-proven semantic order
+  `792, 793, 794, 795`; keeping raw ADT order loses the MTP hello interrupt.
 - **DockChannel HID robustness:** invalid interface indices are rejected before
   indexing, zero-length events are dropped, malformed packet work is freed,
   and `starting` is cleared on ready and timeout so a failed start can retry.
@@ -78,6 +81,12 @@ than every experiment ticket. It is a bring-up ledger, not a support promise.
 - **DockChannel module teardown:** the deliberate `BUG_ON(1)` remove callback
   has been replaced with worker draining, HID-child destruction, and workqueue
   cleanup so diagnostic module unload cannot intentionally panic the kernel.
+- **DockChannel lifetime/parser cleanup:** interface DT-node references and
+  workqueues are released on failure/removal, failed packet queueing frees its
+  work item, zero-sized commands are rejected before report-ID access, and
+  GPIO init blocks are bounded by the block length with a fixed-width name copy.
+- **cpufreq DT lifetime:** the performance-domain node reference is retained
+  through `of_iomap()` and released only after the mapping attempt.
 - **m1n1 stage1 provenance:** fixed. CI rebuilds the J614s-hardened v1.9.9
   source twice byte-identically with `RELEASE=1 CHAINLOADING=1`, GCC cross
   tools and Rust/Cargo 1.98.1, then compares it to the immutable binary at

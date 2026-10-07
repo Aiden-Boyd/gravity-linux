@@ -236,7 +236,9 @@ jobs:
           grep -q 'apple,dockchannel-hid' /tmp/j614s-all.dts
           grep -q 'apple,helper-cpu' /tmp/j614s-all.dts
           grep -q 'apple,rtk-helper-asc4' /tmp/j614s-all.dts
-          python3 -c 'import re; t=open("arch/arm64/boot/dts/apple/t6040.dtsi").read(); m=re.search(r"mtp_mbox:\s*mailbox@514608000\s*\{(.*?)\n\s*\};", t, re.S); assert m, "missing J614s MTP mailbox node"; irqs=[int(x) for x in re.findall(r"<AIC_IRQ\s+(\d+)\s+IRQ_TYPE_LEVEL_HIGH>", m.group(1))]; assert irqs[:4] == [793,792,795,794], irqs[:4]'
+          # The ADT stores not-empty first, but Linux interrupt-names are
+          # empty/not-empty. Assert the semantic Linux mapping proven on J614s.
+          python3 -c 'import re; t=open("arch/arm64/boot/dts/apple/t6040.dtsi").read(); m=re.search(r"mtp_mbox:\s*mailbox@514608000\s*\{(.*?)\n\s*\};", t, re.S); assert m, "missing J614s MTP mailbox node"; irqs=[int(x) for x in re.findall(r"<AIC_IRQ\s+(\d+)\s+IRQ_TYPE_LEVEL_HIGH>", m.group(1))]; assert irqs[:4] == [792,793,794,795], irqs[:4]; assert "\"send-empty\", \"send-not-empty\"" in m.group(1) and "\"recv-empty\", \"recv-not-empty\"" in m.group(1), "bad MTP interrupt-names"'
 
       - name: Build RAM-only initramfs
         run: |

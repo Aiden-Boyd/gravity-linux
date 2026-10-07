@@ -125,7 +125,10 @@ The Apple firmware blob is intentionally not stored in this repository.
 ## Additional J614s runtime guards
 
 The T6040 AIC path avoids firmware-locked EL2 guest-timer/vGIC system
-registers, the MTP ASC mailbox uses the measured J614s interrupt ordering
-`793, 792, 795, 794`, and DockChannel HID rejects invalid interface indices
-and recovers its interface-start state after timeouts. These are runtime
-guards; they complement, rather than replace, the single-CPU/WFI mitigations.
+registers. The J614s ADT lists the MTP mailbox lines in raw not-empty-first
+order `793, 792, 795, 794`, while Linux consumes them in semantic
+empty/not-empty order `792, 793, 794, 795`; the DT uses the latter,
+hardware-proven mapping. DockChannel HID also rejects invalid interface
+indices and recovers its interface-start state after timeouts. These are
+runtime guards; they complement, rather than replace, the single-CPU/WFI
+mitigations.

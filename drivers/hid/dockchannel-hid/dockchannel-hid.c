@@ -172,7 +172,7 @@ struct dchid_iface {
 
 	int index;
 	const char *name;
-	const struct device_node *of_node;
+	struct device_node *of_node;
 
 	uint8_t tx_seq;
 	bool deferred;
@@ -184,7 +184,7 @@ struct dchid_iface {
 	size_t hid_desc_len;
 
 	struct gpio_desc *gpio;
-	char gpio_name[MAX_GPIO_NAME];
+	char gpio_name[MAX_GPIO_NAME + 1];
 	int gpio_id;
 
 	struct mutex out_mutex;
@@ -248,6 +248,8 @@ dchid_get_interface(struct dockchannel_hid *dchid, int index, const char *name)
 
 	iface->index = index;
 	iface->name = devm_kstrdup(dchid->dev, name, GFP_KERNEL);
+	if (!iface->name)
+		return NULL;
 	iface->dchid = dchid;
 	iface->out_report= -1;
 	init_completion(&iface->out_complete);
@@ -266,6 +268,8 @@ dchid_get_interface(struct dockchannel_hid *dchid, int index, const char *name)
 	iface->of_node = of_get_child_by_name(dchid->dev->of_node, name);
 	if (!iface->of_node) {
 		dev_warn(dchid->dev, "No OF node for subdevice %s, ignoring.", name);
+		destroy_workqueue(iface->wq);
+		iface->wq = NULL;
 		return NULL;
 	}
 
@@ -338,7 +342,12 @@ static int dchid_cmd(struct dchid_iface *iface, u32 type, u32 req,
 		     void *data, size_t size, void *resp_buf, size_t resp_size)
 {
 	int ret;
-	int report_id = *(u8*)data;
+	int report_id;
+
+	if (!data || !size)
+		return -EINVAL;
+
+	report_id = *(u8 *)data;
 
 	mutex_lock(&iface->out_mutex);
 
@@ -888,8 +897,11 @@ static void dchid_handle_init(struct dockchannel_hid *dchid, void *data, size_t 
 		case INIT_GPIO_REQUEST: {
 			struct dchid_gpio_request *req = data;
 
-			if (sizeof(*req) > length)
+			if (blk->length < sizeof(*req)) {
+				dev_warn(dchid->dev, "GPIO request block too short for %s: %u\n",
+					 iface->name, blk->length);
 				break;
+			}
 
 			if (iface->gpio_id) {
 				dev_err(dchid->dev,
@@ -897,7 +909,8 @@ static void dchid_handle_init(struct dockchannel_hid *dchid, void *data, size_t 
 				break;
 			}
 
-			strscpy(iface->gpio_name, req->name, MAX_GPIO_NAME);
+			memcpy(iface->gpio_name, req->name, MAX_GPIO_NAME);
+			iface->gpio_name[MAX_GPIO_NAME] = '\0';
 			iface->gpio_id = req->id;
 			break;
 		}
@@ -1191,7 +1204,8 @@ static void dchid_handle_packet(void *cookie, size_t avail)
 	memcpy(work->data, dchid->pkt_buf, hdr.length);
 	INIT_WORK(&work->work, dchid_packet_work);
 
-	queue_work(iface->wq, &work->work);
+	if (!queue_work(iface->wq, &work->work))
+		kfree(work);
 
 done:
 	dockchannel_await(dchid->dc, dchid_handle_packet, dchid, sizeof(struct dchid_hdr));
@@ -1276,9 +1290,10 @@ static int dockchannel_hid_probe(struct platform_device *pdev)
 
 	/* Now it is safe to begin initializing */
 	dchid->dc = dockchannel_init(pdev);
-	if (IS_ERR_OR_NULL(dchid->dc)) {
+	if (IS_ERR(dchid->dc))
 		return PTR_ERR(dchid->dc);
-	}
+	if (!dchid->dc)
+		return -ENODEV;
 	dchid->new_iface_wq = alloc_workqueue("dchid-new", WQ_MEM_RECLAIM, 0);
 	if (!dchid->new_iface_wq)
 		return -ENOMEM;
@@ -1286,6 +1301,8 @@ static int dockchannel_hid_probe(struct platform_device *pdev)
 	dchid->comm = dchid_get_interface(dchid, IFACE_COMM, "comm");
 	if (!dchid->comm) {
 		dev_err(dchid->dev, "Failed to initialize comm interface");
+		destroy_workqueue(dchid->new_iface_wq);
+		dchid->new_iface_wq = NULL;
 		return -EIO;
 	}
 
@@ -1333,9 +1350,17 @@ static void dockchannel_hid_remove(struct platform_device *pdev)
 	for (i = 0; i < MAX_INTERFACES; i++) {
 		struct dchid_iface *iface = dchid->ifaces[i];
 
-		if (iface && iface->wq) {
+		if (!iface)
+			continue;
+
+		if (iface->wq) {
 			destroy_workqueue(iface->wq);
 			iface->wq = NULL;
+		}
+
+		if (iface->of_node) {
+			of_node_put(iface->of_node);
+			iface->of_node = NULL;
 		}
 	}
 

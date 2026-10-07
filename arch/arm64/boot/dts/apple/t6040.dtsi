@@ -345,14 +345,16 @@
 			reg = <0x5 0x14608000 0x0 0x4000>;
 			interrupt-parent = <&aic>;
 			/*
-			 * J614s ADT orders ASC mailbox pairs non-empty first:
-			 * [793, 792, 795, 794]. Keep that order; reversing each pair
-			 * leaves MTP/DockChannel waiting on the wrong interrupt.
+			 * The J614s ADT lists these as [793, 792, 795, 794],
+			 * with not-empty first in each pair. Linux's binding is
+			 * semantic empty/not-empty order, so map the physical lines
+			 * to [792, 793, 794, 795]. Exact J614s testing found that
+			 * keeping raw ADT order loses the MTP hello interrupt.
 			 */
-			interrupts = <AIC_IRQ 793 IRQ_TYPE_LEVEL_HIGH>,
-				     <AIC_IRQ 792 IRQ_TYPE_LEVEL_HIGH>,
-				     <AIC_IRQ 795 IRQ_TYPE_LEVEL_HIGH>,
-				     <AIC_IRQ 794 IRQ_TYPE_LEVEL_HIGH>;
+			interrupts = <AIC_IRQ 792 IRQ_TYPE_LEVEL_HIGH>,
+				     <AIC_IRQ 793 IRQ_TYPE_LEVEL_HIGH>,
+				     <AIC_IRQ 794 IRQ_TYPE_LEVEL_HIGH>,
+				     <AIC_IRQ 795 IRQ_TYPE_LEVEL_HIGH>;
 			interrupt-names = "send-empty", "send-not-empty",
 					  "recv-empty", "recv-not-empty";
 			#mbox-cells = <0>;
