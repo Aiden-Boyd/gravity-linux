@@ -52,6 +52,7 @@ class NVMeCandidateGateTests(unittest.TestCase):
             'NVMMU_TCB_DMA_FROM_DEVICE NVMMU_TCB_DMA_TO_DEVICE '
             'adt_get_reg(adt, adt_path, "reg", 9, &nvme_base, NULL)'
         )
+        (m1n1 / "src/kboot.c").write_text('nvme_ensure_shutdown();')
         self.assertTrue(all(c.passed for c in gate.check_m1n1(m1n1)))
 
     def test_contract_rejects_placeholder(self):
