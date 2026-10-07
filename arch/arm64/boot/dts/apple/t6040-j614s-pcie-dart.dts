@@ -1,0 +1,49 @@
+// SPDX-License-Identifier: GPL-2.0+ OR MIT
+/*
+ * Apple MacBook Pro (14-inch, M4 Pro, 2024) J614s
+ * PCIe/DART thin bring-up target.
+ *
+ * This enables only the AP pinctrl controller, the two measured PCIe DARTs,
+ * and the PCIe root complex. All four downstream ports remain disabled, so no
+ * endpoint power GPIO is driven and no Wi-Fi/BT/SD device is exposed.
+ */
+
+/dts-v1/;
+
+#include "t6040-j614s.dts"
+
+/ {
+	model = "Apple MacBook Pro (14-inch, M4 Pro, 2024) J614s [PCIe/DART thin]";
+};
+
+&pinctrl_ap {
+	status = "okay";
+};
+
+&pcie0_dart_0 {
+	status = "okay";
+};
+
+&pcie0_dart_1 {
+	status = "okay";
+};
+
+&pcie0 {
+	status = "okay";
+};
+
+&port00 {
+	status = "disabled";
+};
+
+&port01 {
+	status = "disabled";
+};
+
+&port02 {
+	status = "disabled";
+};
+
+&port03 {
+	status = "disabled";
+};
