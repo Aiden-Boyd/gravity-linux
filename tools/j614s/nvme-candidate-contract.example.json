@@ -1,0 +1,12 @@
+{
+  "linux_commit": "REPLACE_WITH_IMMUTABLE_COMMIT",
+  "m1n1_commit": "REPLACE_WITH_IMMUTABLE_COMMIT",
+  "dt_artifact_sha256": "REPLACE_WITH_64_HEX_SHA256",
+  "first_test_stage": "N0",
+  "recovery_plan": "REPLACE_WITH_CANDIDATE_SPECIFIC_RECOVERY_PLAN",
+  "storage_policy": {
+    "auto_probe": false,
+    "filesystem_use": false,
+    "modification_allowed": false
+  }
+}
