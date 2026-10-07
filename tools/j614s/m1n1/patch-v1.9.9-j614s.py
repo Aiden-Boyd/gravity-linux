@@ -90,6 +90,35 @@ edit("src/smp.c",
     wfe_mode = new_mode;
 """)
 
+# M4 Pro first-boot RVBAR guard: preserve the boot CPU reset vector that
+# iBoot supplied. On M4 the RVBAR register can be inaccessible/unsafe to
+# rewrite in raw boot; do not touch it on T6040 even when the older lock-bit
+# interpretation reports it as unlocked. This is a candidate for testing,
+# NOT an explanation of the observed iBoot panic until hardware evidence exists.
+edit("src/smp.c",
+"""        if (i == boot_cpu_idx) {
+            // Check if already locked
+            if (FIELD_GET(RVBAR_LOCK, read64(cpu->impl_reg)))
+                continue;
+
+            // Unlocked, write _vectors_start into boot CPU's rvbar
+""",
+"""        if (i == boot_cpu_idx) {
+            // T6040 preserves the reset vector programmed by iBoot. Do not
+            // read or write the RVBAR implementation register on this chip:
+            // attempting to rewrite it may fault on M4 Pro hardware.
+            if (chip_id == T6040) {
+                printf("smp: T6040 preserving boot CPU RVBAR\\n");
+                continue;
+            }
+
+            // Check if already locked
+            if (FIELD_GET(RVBAR_LOCK, read64(cpu->impl_reg)))
+                continue;
+
+            // Unlocked, write _vectors_start into boot CPU's rvbar
+""")
+
 # First-boot isolation without breaking the later diagnostic profile.
 # Upstream v1.9.9's T6040 PCIe path contains the hardware-proven BIT(4)
 # PHY-reset fix used successfully on J614s. SAFE keeps the Linux PCIe node
