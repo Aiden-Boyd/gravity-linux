@@ -1,0 +1,66 @@
+name: J614s m1n1 M4 NVMe Reference
+
+on:
+  push:
+    branches:
+      - j614s-nvme-prep-v1
+    paths:
+      - '.github/workflows/j614s-m1n1-nvme-reference.yml'
+      - 'tools/j614s/t6040-nvme-evidence.json'
+      - 'tools/j614s/NVME_BRINGUP.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-reference:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout Gravity metadata
+        uses: actions/checkout@v4
+        with:
+          path: gravity
+
+      - name: Checkout exact current m1n1 reference
+        uses: actions/checkout@v4
+        with:
+          repository: AsahiLinux/m1n1
+          ref: 2460b604c6f016956ead711823605eea840c602e
+          submodules: recursive
+          path: m1n1
+
+      - name: Audit exact M4 NVMe source shape
+        run: |
+          test "$(git -C m1n1 rev-parse HEAD)" = "2460b604c6f016956ead711823605eea840c602e"
+          grep -q 'nvme-secure-bar' m1n1/src/nvme.c
+          grep -q 'NVME_T8132' m1n1/src/nvme.c
+          grep -q 'adt_get_reg(adt, adt_path, "reg", 9, &nvme_base' m1n1/src/nvme.c
+          grep -q 'NVME_IOQ_CMDS' m1n1/src/nvme.c
+          grep -q 'NVME_IOQ_CQES' m1n1/src/nvme.c
+          grep -q 'NVMMU_TCB_DMA_FROM_DEVICE' m1n1/src/nvme.c
+          grep -q 'NVMMU_TCB_DMA_TO_DEVICE' m1n1/src/nvme.c
+
+      - name: Build upstream reference
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gcc-aarch64-linux-gnu
+          rustup target add aarch64-unknown-none-softfloat
+          make -C m1n1 -j2 ARCH=aarch64-linux-gnu- CHAINLOADING=1
+
+          test -s m1n1/build/m1n1.bin
+          {
+            echo "REFERENCE ONLY — NOT A GRAVITY J614s BOOT CANDIDATE"
+            echo "m1n1_commit=$(git -C m1n1 rev-parse HEAD)"
+            echo "m1n1_bin_sha256=$(sha256sum m1n1/build/m1n1.bin | awk '{print $1}')"
+            echo "gravity_branch=$GITHUB_REF_NAME"
+            echo "reason=This build lacks Gravity's reviewed J614s stage1 patch set and exists only to prove the current M4 NVMe source compiles."
+          } | tee m1n1-nvme-reference.txt
+
+      - name: Upload non-boot reference report
+        uses: actions/upload-artifact@v4
+        with:
+          name: j614s-m1n1-nvme-reference-report
+          path: m1n1-nvme-reference.txt
+          if-no-files-found: error
