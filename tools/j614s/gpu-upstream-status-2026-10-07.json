@@ -1,0 +1,37 @@
+{
+  "checked_date": "2026-10-07",
+  "admission": "blocked",
+  "official_feature_status": {
+    "repository": "AsahiLinux/docs",
+    "ref": "0d1f8917fa88745d62a4c05d802c4a7298c8616b",
+    "path": "docs/platform/feature-support/m4.md",
+    "t604x_gpu": "TBA",
+    "meaning": "Active work is not listed as underway and no supported stack is published."
+  },
+  "m1n1": {
+    "repository": "AsahiLinux/m1n1",
+    "ref": "2460b604c6f016956ead711823605eea840c602e",
+    "observations": [
+      "dt_set_gpu() has no T6040 case and falls to unsupported chip.",
+      "rust/src/gpu/hw/mod.rs defines GpuGen only through G13 and G14."
+    ],
+    "t6040_g16_ready": false
+  },
+  "linux_gpu_branch": {
+    "repository": "AsahiLinux/linux",
+    "branch": "bits/210-gpu",
+    "ref": "97b22d1355086a88447a048fc78212769ca5f41c",
+    "observations": [
+      "DRM_ASAHI still depends on BROKEN.",
+      "The OF table has explicit devices only through T6022.",
+      "No explicit T6040/G16 hardware configuration is present."
+    ],
+    "t6040_g16_ready": false
+  },
+  "mesa": {
+    "status": "must-be-explicitly-verified-on-a-candidate",
+    "reason": "A future candidate is admitted only if its exact Mesa checkout exposes an explicit G16/AGX2 path. Generic generation >=14 handling is not accepted as proof.",
+    "t6040_g16_ready": false
+  },
+  "conclusion": "No maintainer-endorsed complete T6040/G16 m1n1 + Linux + firmware ABI + Mesa candidate exists in the checked sources. Keep native GPU probing disabled."
+}
