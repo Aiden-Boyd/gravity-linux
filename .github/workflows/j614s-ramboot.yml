@@ -121,6 +121,10 @@ jobs:
           grep -q 'apple,t6041-pmgr-pwrstate' drivers/pmdomain/apple/pmgr-pwrstate.c
           grep -q 'skip_auto_enable' drivers/pmdomain/apple/pmgr-pwrstate.c
           grep -Eq 'BRCMF_BSS_INFO_MAX_VERSION[[:space:]]+116' drivers/net/wireless/broadcom/brcm80211/brcmfmac/fwil_types.h
+          grep -q 'BRCMF_FW_ENTRY(BRCM_CC_4388_CHIP_ID, 0x00000040, 4388C2)' drivers/net/wireless/broadcom/brcm80211/brcmfmac/pcie.c
+          grep -q 'HID_TYPE_SPI_KEYBOARD' drivers/hid/dockchannel-hid/dockchannel-hid.c
+          grep -q 'HID_TYPE_SPI_MOUSE' drivers/hid/dockchannel-hid/dockchannel-hid.c
+          grep -q '0x0de70000' arch/arm64/boot/dts/apple/t6040.dtsi
           grep -q 'frequency \* 1000UL' drivers/cpufreq/apple-soc-cpufreq.c
           grep -q 'compatible = "pci14e4,4434"' arch/arm64/boot/dts/apple/t6040-j614s-all.dts
           grep -q 'compatible = "pci14e4,5f72"' arch/arm64/boot/dts/apple/t6040-j614s-all.dts
@@ -191,9 +195,9 @@ jobs:
 
           case "$PROFILE" in
             safe)
-              if grep -Eq '^CONFIG_(NVME_APPLE|BLK_DEV_NVME|PCIE_APPLE|APPLE_DART|MFD_MACSMC|APPLE_DOCKCHANNEL|HID_DOCKCHANNEL|BRCMFMAC|BT_HCIBCM4377|WLAN|BT|MMC|USB)=[ym]$' .config; then
+              if grep -Eq '^CONFIG_(NVME_APPLE|BLK_DEV_NVME|PCIE_APPLE|APPLE_DART|MFD_MACSMC|MACSMC_POWER|SENSORS_MACSMC_HWMON|INPUT_MACSMC_INPUT|APPLE_DOCKCHANNEL|HID_DOCKCHANNEL|HID_MAGICMOUSE|BRCMFMAC|BT_HCIBCM4377|WLAN|BT|MMC|USB)=[ym]$' .config; then
                 echo "SAFE profile unexpectedly enabled a hardware-facing driver:" >&2
-                grep -E '^CONFIG_(NVME_APPLE|BLK_DEV_NVME|PCIE_APPLE|APPLE_DART|MFD_MACSMC|APPLE_DOCKCHANNEL|HID_DOCKCHANNEL|BRCMFMAC|BT_HCIBCM4377|WLAN|BT|MMC|USB)=' .config >&2 || true
+                grep -E '^CONFIG_(NVME_APPLE|BLK_DEV_NVME|PCIE_APPLE|APPLE_DART|MFD_MACSMC|MACSMC_POWER|SENSORS_MACSMC_HWMON|INPUT_MACSMC_INPUT|APPLE_DOCKCHANNEL|HID_DOCKCHANNEL|HID_MAGICMOUSE|BRCMFMAC|BT_HCIBCM4377|WLAN|BT|MMC|USB)=' .config >&2 || true
                 exit 1
               fi
               ;;
