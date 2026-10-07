@@ -161,7 +161,9 @@ DTB_PATH="arch/arm64/boot/dts/$DTB"
 test -s "$DTB_PATH"
 
 rm -rf ramroot
-mkdir -p ramroot/{proc,sys,dev,etc,bin,sbin,run,tmp}
+mkdir -p \
+    ramroot/proc ramroot/sys ramroot/dev ramroot/etc \
+    ramroot/bin ramroot/sbin ramroot/run ramroot/tmp
 
 if [ "$NEED_BUSYBOX" = 0 ]; then
     aarch64-linux-gnu-gcc -static -Os -s tools/j614s/ramboot-init.c -o ramroot/init
