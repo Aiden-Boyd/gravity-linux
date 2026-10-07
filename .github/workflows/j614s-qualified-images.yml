@@ -183,6 +183,36 @@ jobs:
             sha256sum * > SHA256SUMS
           )
 
+      - name: Final artifact QA before upload
+        run: |
+          sh matrix/tools/j614s/artifact_qa.sh \
+            "${{ matrix.profile }}" \
+            "${{ matrix.sha }}" \
+            "$GITHUB_WORKSPACE/out-${{ matrix.profile }}" \
+            matrix/tools/j614s/bringup-images.json \
+            qualification/qualification.json | tee artifact-qa.txt
+
+          grep -qx "ARTIFACT_QA_PASS ${{ matrix.profile }} ${{ matrix.sha }}" artifact-qa.txt
+          cp artifact-qa.txt "$GITHUB_WORKSPACE/out-${{ matrix.profile }}/ARTIFACT_QA.txt"
+
+          (
+            cd "$GITHUB_WORKSPACE/out-${{ matrix.profile }}"
+            rm -f SHA256SUMS
+            sha256sum * > SHA256SUMS
+          )
+
+          # Re-run the hash check after adding the QA certificate.
+          (
+            cd "$GITHUB_WORKSPACE/out-${{ matrix.profile }}"
+            grep -v '  SHA256SUMS
+        uses: actions/upload-artifact@v4
+        with:
+          name: j614s-qualified-${{ matrix.profile }}
+          path: out-${{ matrix.profile }}/
+          if-no-files-found: error
+ SHA256SUMS | sha256sum -c -
+          )
+
       - name: Upload qualified bring-up image
         uses: actions/upload-artifact@v4
         with:
