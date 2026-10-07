@@ -331,6 +331,43 @@ def profile_checks(root: pathlib.Path, profile: dict) -> None:
             "CONFIG_NVME_APPLE": "n",
         })
 
+    elif gate == "input":
+        run("sh", "tools/j614s/input-audit.sh", cwd=root)
+        resolved_config_and_dtb_check(root, "input-thin",
+                                      "apple/t6040-j614s-input.dtb", {
+            "CONFIG_SMP": "y",
+            "CONFIG_APPLE_MAILBOX": "m",
+            "CONFIG_APPLE_RTKIT": "m",
+            "CONFIG_APPLE_RTKIT_HELPER": "m",
+            "CONFIG_APPLE_DART": "m",
+            "CONFIG_APPLE_DOCKCHANNEL": "m",
+            "CONFIG_HID_DOCKCHANNEL": "m",
+            "CONFIG_PCIE_APPLE": "n",
+            "CONFIG_MFD_MACSMC": "n",
+            "CONFIG_NVME_APPLE": "n",
+        })
+
+    elif gate == "power":
+        run("sh", "tools/j614s/pcie-dart-audit.sh", cwd=root)
+        run("sh", "tools/j614s/smc-audit.sh", cwd=root)
+        run("sh", "tools/j614s/power-audit.sh", cwd=root)
+        resolved_config_and_dtb_check(root, "power-thin",
+                                      "apple/t6040-j614s-power.dtb", {
+            "CONFIG_SMP": "y",
+            "CONFIG_APPLE_DART": "y",
+            "CONFIG_PCIE_APPLE": "y",
+            "CONFIG_MFD_MACSMC": "y",
+            "CONFIG_GPIO_MACSMC": "n",
+            "CONFIG_MACSMC_POWER": "m",
+            "CONFIG_SENSORS_MACSMC_HWMON": "m",
+            "CONFIG_INPUT_MACSMC_INPUT": "m",
+            "CONFIG_RTC_DRV_MACSMC": "m",
+            "CONFIG_ARM_APPLE_SOC_CPUFREQ": "m",
+            "CONFIG_BRCMFMAC": "n",
+            "CONFIG_MMC": "n",
+            "CONFIG_NVME_APPLE": "n",
+        })
+
     else:
         die(f"source gate {gate!r} is not admitted for building")
 
