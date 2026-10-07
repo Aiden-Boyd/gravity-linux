@@ -1,0 +1,133 @@
+{
+  "schema_version": 1,
+  "status": "evidence-only",
+  "machine": {
+    "model": "Mac16,8",
+    "board": "J614s",
+    "soc": "T6040",
+    "gpu_generation": "G16"
+  },
+  "safety": {
+    "do_not_probe": true,
+    "do_not_power_on": true,
+    "do_not_invent_g14_alias": true,
+    "simpledrm_only_until_explicit_g16_stack": true
+  },
+  "provenance": [
+    {
+      "repository": "damsleth/wallace",
+      "ref": "55f116dd0e0f28d1412c6be728a101f7d861c473",
+      "path": "evidence/2026-07-24-t6040-gpu-upstream-test-prep.md",
+      "captured_adt_sha256": "7a92e6e4d16cb1b5a5858beb22b22acc8e5ed4b36ed5d5ccde9b251f1da55c84",
+      "device_tree_tag": "EmbeddedDeviceTrees-11156.120.31"
+    },
+    {
+      "repository": "damsleth/wallace",
+      "ref": "55f116dd0e0f28d1412c6be728a101f7d861c473",
+      "path": "patches/linux-t6040-j614s-dt-v1/0002-arm64-dts-apple-add-T6040-and-J614s-MacBook-Pro.patch",
+      "note": "PMGR GFX domains were generated from the J614s ADT via pmgr_adt2dt.py."
+    }
+  ],
+  "adt": {
+    "sgx": {
+      "path": "/arm-io/sgx",
+      "compatible": "gpu,t6040",
+      "registers": [
+        {"base": "0x88000000", "size": "0x03758000"},
+        {"base": "0x88d00000", "size": "0x0016c000"}
+      ],
+      "interrupts_raw_adt": [1481, 1482, 1483, 1484, 1505, 1507, 1496, 1498],
+      "performance": {
+        "perf_state_count": 16,
+        "perf_state_table_count": 2,
+        "gpu_num_perf_states": 15
+      },
+      "features": {
+        "metal_standard": "0x100",
+        "opengl_standard": "0x300",
+        "agx_address_space_mgmt_mode": 1,
+        "has_kf": 1
+      }
+    },
+    "gfx_asc": {
+      "path": "/arm-io/gfx-asc",
+      "compatible": "iop,ascwrap-v6",
+      "registers": [
+        {"base": "0x8a600000", "size": "0x00088000"},
+        {"base": "0x8a050000", "size": "0x00060000"}
+      ],
+      "interrupts_raw_adt": [1502, 1501, 1504, 1503],
+      "linux_mailbox_semantic_candidate": {
+        "interrupts": [1501, 1502, 1503, 1504],
+        "interrupt_names": [
+          "send-empty",
+          "send-not-empty",
+          "recv-empty",
+          "recv-not-empty"
+        ],
+        "confidence": "derived-not-driver-endorsed",
+        "basis": "Every reviewed J614s ASC wrapper uses ADT not-empty-first pair ordering [n+1,n,n+3,n+2], while Linux ASC mailbox bindings use empty/not-empty semantic order."
+      }
+    },
+    "reserved_regions": {
+      "gpu-region": {"base": "0x105fffb8000", "size": "0x4000"},
+      "gfx-handoff": {"base": "0x105fff70000", "size": "0x4000"},
+      "gfx-shared-region": {"base": "0x105fff78000", "size": "0x40000"},
+      "gfx-shared-l2-region": {"base": "0x105fff74000", "size": "0x4000"},
+      "gfx-data": {"base": "0x10001d34000", "size": "0x138000"},
+      "rtkit-private-vm-region": {"base": "0xfffffc0000000000", "size": "0x2000000000"}
+    }
+  },
+  "pmgr": {
+    "block": {
+      "label": "pmgr0",
+      "base": "0x288e80000",
+      "size": "0x4000"
+    },
+    "domains": [
+      {
+        "label": "ps_gpx",
+        "offset": "0x0",
+        "name": "gpx",
+        "always_on": true,
+        "parents": []
+      },
+      {
+        "label": "ps_afr",
+        "offset": "0x100",
+        "name": "afr",
+        "always_on": true,
+        "parents": []
+      },
+      {
+        "label": "ps_gfx",
+        "offset": "0x110",
+        "name": "gfx",
+        "always_on": false,
+        "parents": ["ps_afr"]
+      }
+    ]
+  },
+  "firmware_evidence": {
+    "macos_build": "26.5.2 (25F84)",
+    "rtkit": "RTKit-1558.40.16.release",
+    "identifiers": [
+      "AGXFirmwareKextG16RTBuddy",
+      "AGXG16X",
+      "AGXAcceleratorG16X",
+      "gpu,t6040"
+    ],
+    "kernelcache_sha256": {
+      "compressed_im4p": "4cc018b4ab925d879a0f039bf1f83cdbd11dc0bd906910afd1f9d15befabad1b",
+      "decompressed_arm64e": "ed556fe62efc2c229f3d4c7ebbbcd21fd5c8d099fbb4d9b5ae636dd78b61d3f6"
+    }
+  },
+  "unresolved_linux_contract": [
+    "Explicit T6040/G16 drm/asahi hardware configuration and compatible string",
+    "G16/macOS-26.x firmware ABI structures",
+    "Which of the two SGX and two gfx-asc ADT ranges map to Linux named resources and whether additional resources are required",
+    "T6040 m1n1 dt_set_gpu calibration/UAT handoff",
+    "Exact mapping from the six ADT reserved regions to the future T6040 Linux/m1n1 ABI",
+    "Explicit Mesa G16/AGX2 userspace path"
+  ]
+}
