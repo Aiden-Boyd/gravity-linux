@@ -1,0 +1,35 @@
+// SPDX-License-Identifier: GPL-2.0+ OR MIT
+/*
+ * J614s internal keyboard/trackpad isolated bring-up target.
+ *
+ * Enables only the measured MTP mailbox/DART/RTKit-helper/DockChannel HID
+ * chain. PCIe, SMC and storage remain disabled.
+ */
+
+/dts-v1/;
+
+#include "t6040-j614s.dts"
+
+/ {
+	model = "Apple MacBook Pro (14-inch, M4 Pro, 2024) J614s [Input thin]";
+};
+
+&mtp_mbox {
+	status = "okay";
+};
+
+&mtp_dart {
+	status = "okay";
+};
+
+&mtp {
+	status = "okay";
+};
+
+&mtp_dockchannel {
+	status = "okay";
+};
+
+&mtp_hid {
+	status = "okay";
+};
