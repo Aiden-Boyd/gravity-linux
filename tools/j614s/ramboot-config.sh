@@ -4,7 +4,7 @@
 
 set -eu
 
-PROFILE=${1:?usage: ramboot-config.sh safe|diagnostic|yolo|smp-thin}
+PROFILE=${1:?usage: ramboot-config.sh safe|diagnostic|yolo|smp-thin|pcie-dart-thin}
 CFG=scripts/config
 
 enable() { "$CFG" --enable "$1"; }
@@ -34,6 +34,29 @@ safe|smp-thin)
 	disable CONFIG_BLK_DEV_NVME
 	disable CONFIG_PCIE_APPLE
 	disable CONFIG_APPLE_DART
+	disable CONFIG_MFD_MACSMC
+	disable CONFIG_APPLE_DOCKCHANNEL
+	disable CONFIG_HID_DOCKCHANNEL
+	disable CONFIG_BRCMFMAC
+	disable CONFIG_WLAN
+	disable CONFIG_BT
+	disable CONFIG_MMC
+	disable CONFIG_USB
+	;;
+
+pcie-dart-thin)
+	# Isolate the root complex and its two measured DARTs. Downstream ports
+	# stay disabled in the dedicated DT, and SMC/endpoint stacks stay out.
+	enable CONFIG_PM
+	enable CONFIG_PCI
+	enable CONFIG_PCI_MSI
+	enable CONFIG_IOMMU_SUPPORT
+	enable CONFIG_PINCTRL
+	enable CONFIG_PINCTRL_APPLE_GPIO
+	enable CONFIG_APPLE_DART
+	enable CONFIG_PCIE_APPLE
+	disable CONFIG_NVME_APPLE
+	disable CONFIG_BLK_DEV_NVME
 	disable CONFIG_MFD_MACSMC
 	disable CONFIG_APPLE_DOCKCHANNEL
 	disable CONFIG_HID_DOCKCHANNEL
