@@ -115,3 +115,111 @@
 		wp-inverted;
 	};
 };
+
+/*
+ * T6040 cluster DVFS data measured on J614s and hardware-validated by
+ * Project Wallace (CJ Damsleth). Kept diagnostic-only until hardware smoke.
+ */
+&soc {
+	cpufreq_e: cpufreq@210e20000 {
+		compatible = "apple,t8112-cluster-cpufreq";
+		reg = <0x2 0x10e20000 0x0 0x1000>;
+		#performance-domain-cells = <0>;
+	};
+
+	cpufreq_p0: cpufreq@211e20000 {
+		compatible = "apple,t8112-cluster-cpufreq";
+		reg = <0x2 0x11e20000 0x0 0x1000>;
+		#performance-domain-cells = <0>;
+	};
+
+	cpufreq_p1: cpufreq@212e20000 {
+		compatible = "apple,t8112-cluster-cpufreq";
+		reg = <0x2 0x12e20000 0x0 0x1000>;
+		#performance-domain-cells = <0>;
+	};
+};
+
+#define J614S_OPP(_name, _hz, _level) \
+	_name { opp-hz = /bits/ 64 <_hz>; opp-level = <_level>; };
+
+/ {
+	sawtooth_opp: opp-table-j614s-e {
+		compatible = "operating-points-v2";
+		opp-shared;
+		J614S_OPP(opp01, 1020000000, 1)
+		J614S_OPP(opp02, 1404000000, 2)
+		J614S_OPP(opp03, 1788000000, 3)
+		J614S_OPP(opp04, 2112000000, 4)
+		J614S_OPP(opp05, 2352000000, 5)
+		J614S_OPP(opp06, 2532000000, 6)
+		J614S_OPP(opp07, 2592000000, 7)
+	};
+
+	everest_opp0: opp-table-j614s-p0 {
+		compatible = "operating-points-v2";
+		opp-shared;
+		J614S_OPP(opp01, 1260000000, 1)
+		J614S_OPP(opp02, 1512000000, 2)
+		J614S_OPP(opp03, 1800000000, 3)
+		J614S_OPP(opp04, 2088000000, 4)
+		J614S_OPP(opp05, 2352000000, 5)
+		J614S_OPP(opp06, 2616000000, 6)
+		J614S_OPP(opp07, 2868000000, 7)
+		J614S_OPP(opp08, 3096000000, 8)
+		J614S_OPP(opp09, 3300000000, 9)
+		J614S_OPP(opp10, 3468000000, 10)
+		J614S_OPP(opp11, 3624000000, 11)
+		J614S_OPP(opp12, 3756000000, 12)
+		J614S_OPP(opp13, 3852000000, 13)
+		J614S_OPP(opp14, 3924000000, 14)
+		J614S_OPP(opp15, 3996000000, 15)
+		J614S_OPP(opp16, 4044000000, 16)
+		J614S_OPP(opp17, 4104000000, 17)
+		J614S_OPP(opp18, 4416000000, 18)
+		J614S_OPP(opp19, 4512000000, 19)
+	};
+
+	everest_opp1: opp-table-j614s-p1 {
+		compatible = "operating-points-v2";
+		opp-shared;
+		J614S_OPP(opp01, 1260000000, 1)
+		J614S_OPP(opp02, 1512000000, 2)
+		J614S_OPP(opp03, 1800000000, 3)
+		J614S_OPP(opp04, 2088000000, 4)
+		J614S_OPP(opp05, 2352000000, 5)
+		J614S_OPP(opp06, 2616000000, 6)
+		J614S_OPP(opp07, 2868000000, 7)
+		J614S_OPP(opp08, 3096000000, 8)
+		J614S_OPP(opp09, 3300000000, 9)
+		J614S_OPP(opp10, 3468000000, 10)
+		J614S_OPP(opp11, 3624000000, 11)
+		J614S_OPP(opp12, 3756000000, 12)
+		J614S_OPP(opp13, 3852000000, 13)
+		J614S_OPP(opp14, 3924000000, 14)
+		J614S_OPP(opp15, 3996000000, 15)
+		J614S_OPP(opp16, 4044000000, 16)
+		J614S_OPP(opp17, 4104000000, 17)
+		J614S_OPP(opp18, 4416000000, 18)
+		J614S_OPP(opp19, 4512000000, 19)
+	};
+};
+
+#undef J614S_OPP
+
+&cpu_e0 { operating-points-v2 = <&sawtooth_opp>; performance-domains = <&cpufreq_e>; };
+&cpu_e1 { operating-points-v2 = <&sawtooth_opp>; performance-domains = <&cpufreq_e>; };
+&cpu_e2 { operating-points-v2 = <&sawtooth_opp>; performance-domains = <&cpufreq_e>; };
+&cpu_e3 { operating-points-v2 = <&sawtooth_opp>; performance-domains = <&cpufreq_e>; };
+
+&cpu_p00 { operating-points-v2 = <&everest_opp0>; performance-domains = <&cpufreq_p0>; };
+&cpu_p01 { operating-points-v2 = <&everest_opp0>; performance-domains = <&cpufreq_p0>; };
+&cpu_p02 { operating-points-v2 = <&everest_opp0>; performance-domains = <&cpufreq_p0>; };
+&cpu_p03 { operating-points-v2 = <&everest_opp0>; performance-domains = <&cpufreq_p0>; };
+&cpu_p04 { operating-points-v2 = <&everest_opp0>; performance-domains = <&cpufreq_p0>; };
+
+&cpu_p10 { operating-points-v2 = <&everest_opp1>; performance-domains = <&cpufreq_p1>; };
+&cpu_p11 { operating-points-v2 = <&everest_opp1>; performance-domains = <&cpufreq_p1>; };
+&cpu_p12 { operating-points-v2 = <&everest_opp1>; performance-domains = <&cpufreq_p1>; };
+&cpu_p13 { operating-points-v2 = <&everest_opp1>; performance-domains = <&cpufreq_p1>; };
+&cpu_p14 { operating-points-v2 = <&everest_opp1>; performance-domains = <&cpufreq_p1>; };
