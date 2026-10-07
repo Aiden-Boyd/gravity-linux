@@ -12,6 +12,10 @@ on:
       - 'tools/j614s/gpu-audit.sh'
       - 'tools/j614s/t6040-gpu-evidence.json'
       - 'tools/j614s/m1n1/collect-gpu-adt.py'
+      - 'tools/j614s/gpu_candidate_gate.py'
+      - 'tools/j614s/gpu-candidate-contract.example.json'
+      - 'tools/j614s/gpu-upstream-status-*.json'
+      - 'tools/j614s/test_gpu_candidate_gate.py'
       - 'arch/arm64/boot/dts/apple/t6040*.dts'
       - 'arch/arm64/boot/dts/apple/t6040*.dtsi'
   workflow_dispatch:
@@ -28,7 +32,11 @@ jobs:
 
       - name: Validate GPU prep tooling and evidence
         run: |
-          python3 -m py_compile tools/j614s/m1n1/collect-gpu-adt.py
+          python3 -m py_compile \
+            tools/j614s/m1n1/collect-gpu-adt.py \
+            tools/j614s/gpu_candidate_gate.py \
+            tools/j614s/test_gpu_candidate_gate.py
+          PYTHONPATH=tools/j614s python3 -m unittest -v tools/j614s/test_gpu_candidate_gate.py
           sh -n tools/j614s/gpu-audit.sh
           sh tools/j614s/gpu-audit.sh
 
@@ -69,7 +77,19 @@ jobs:
           assert d["legacy_downstream_reference"]["m1n1"]["dt_set_gpu_supported_chips"][-1] == "T6022"
           assert "T6040" not in d["legacy_downstream_reference"]["m1n1"]["dt_set_gpu_supported_chips"]
           assert "apple,agx-t6040" not in d["legacy_downstream_reference"]["linux_driver"]["supported_of_compatibles"]
+
+          u = json.load(open("tools/j614s/gpu-upstream-status-2026-10-07.json"))
+          assert u["admission"] == "blocked"
+          assert u["official_feature_status"]["t604x_gpu"] == "TBA"
+          assert u["m1n1"]["t6040_g16_ready"] is False
+          assert u["linux_gpu_branch"]["t6040_g16_ready"] is False
+          assert u["mesa"]["t6040_g16_ready"] is False
           PY
+
+          # The audit itself must recognize raw Apple ADT and Linux compatible
+          # spellings, not only a gpu@ node name.
+          grep -q 'gpu,t6040' tools/j614s/gpu-audit.sh
+          grep -q 'apple,agx-t6040' tools/j614s/gpu-audit.sh
 
           grep -q 'ps_gpx: power-controller@0' arch/arm64/boot/dts/apple/t6040-pmgr.dtsi
           grep -q 'ps_afr: power-controller@100' arch/arm64/boot/dts/apple/t6040-pmgr.dtsi
