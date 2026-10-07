@@ -147,6 +147,36 @@ def check_minimal_config_source(root: pathlib.Path) -> str:
     return cfg
 
 
+def config_block(cfg: str, label: str) -> str:
+    m = re.search(r"(?ms)^" + re.escape(label) + r"\)\n(.*?)^\s*;;", cfg)
+    if not m:
+        die(f"missing {label} config case")
+    return m.group(1)
+
+
+def resolved_config_and_dtb_check(root: pathlib.Path, kprofile: str,
+                                  dtb_target: str,
+                                  expected: dict[str, str]) -> None:
+    """Resolve Kconfig and compile only the target DTB as source qualification."""
+    run("make", "ARCH=arm64", "LLVM=1", "defconfig", cwd=root)
+    run("sh", "tools/j614s/ramboot-config.sh", kprofile, cwd=root)
+    run("make", "ARCH=arm64", "LLVM=1", "olddefconfig", cwd=root)
+
+    config = text(root / ".config")
+    for symbol, state in expected.items():
+        if state == "n":
+            marker = f"# {symbol} is not set"
+        else:
+            marker = f"{symbol}={state}"
+        assert_contains(config, marker,
+                        f"{kprofile}: resolved Kconfig does not contain {marker}")
+
+    run("make", "-j2", "ARCH=arm64", "LLVM=1", dtb_target, cwd=root)
+    dtb_path = root / "arch/arm64/boot/dts/apple" / pathlib.Path(dtb_target).name
+    if not dtb_path.is_file() or dtb_path.stat().st_size == 0:
+        die(f"{kprofile}: DTB source compile did not produce {dtb_path.name}")
+
+
 def profile_checks(root: pathlib.Path, profile: dict) -> None:
     gate = profile["source_gate"]
     cfg = text(root / "tools/j614s/ramboot-config.sh")
@@ -157,6 +187,13 @@ def profile_checks(root: pathlib.Path, profile: dict) -> None:
         check_minimal_config_source(root)
         assert_contains(cfg, "safe)", "SAFE case missing from ramboot config")
         assert_contains(thin_dts, "status = \"disabled\"", "thin DT no longer contains disabled-device guards")
+        resolved_config_and_dtb_check(root, "safe", "apple/t6040-j614s.dtb", {
+            "CONFIG_ARM64_16K_PAGES": "y",
+            "CONFIG_PCIE_APPLE": "n",
+            "CONFIG_APPLE_DART": "n",
+            "CONFIG_MFD_MACSMC": "n",
+            "CONFIG_NVME_APPLE": "n",
+        })
 
     elif gate == "diagnostic":
         for marker in (
@@ -175,6 +212,15 @@ def profile_checks(root: pathlib.Path, profile: dict) -> None:
             'compatible = "pci17a0,9755"',
         ):
             assert_contains(all_dts, marker, f"diagnostic DT missing reviewed marker: {marker}")
+        resolved_config_and_dtb_check(root, "diagnostic", "apple/t6040-j614s-all.dtb", {
+            "CONFIG_ARM64_16K_PAGES": "y",
+            "CONFIG_APPLE_DART": "m",
+            "CONFIG_PCIE_APPLE": "m",
+            "CONFIG_MFD_MACSMC": "m",
+            "CONFIG_BRCMFMAC": "m",
+            "CONFIG_BT_HCIBCM4377": "m",
+            "CONFIG_MMC_SDHCI_PCI": "m",
+        })
 
     elif gate == "yolo":
         for marker in (
@@ -186,6 +232,15 @@ def profile_checks(root: pathlib.Path, profile: dict) -> None:
             "enable CONFIG_MMC_SDHCI_PCI",
         ):
             assert_contains(cfg, marker, f"YOLO source missing {marker}")
+        resolved_config_and_dtb_check(root, "yolo", "apple/t6040-j614s-all.dtb", {
+            "CONFIG_ARM64_16K_PAGES": "y",
+            "CONFIG_APPLE_DART": "y",
+            "CONFIG_PCIE_APPLE": "y",
+            "CONFIG_MFD_MACSMC": "y",
+            "CONFIG_BRCMFMAC": "y",
+            "CONFIG_BT_HCIBCM4377": "y",
+            "CONFIG_MMC_SDHCI_PCI": "y",
+        })
 
     elif gate == "smp-thin":
         check_minimal_config_source(root)
@@ -200,6 +255,81 @@ def profile_checks(root: pathlib.Path, profile: dict) -> None:
         assert_not_contains(wf,
             'cp arch/arm64/boot/dts/apple/t6040-j614s-all.dtb "$OUT/t6040-j614s.dtb"',
             "SMP-thin packages the all-hardware DT")
+        resolved_config_and_dtb_check(root, "smp-thin", "apple/t6040-j614s.dtb", {
+            "CONFIG_SMP": "y",
+            "CONFIG_ARM64_16K_PAGES": "y",
+            "CONFIG_PCIE_APPLE": "n",
+            "CONFIG_APPLE_DART": "n",
+            "CONFIG_MFD_MACSMC": "n",
+        })
+
+    elif gate == "pcie-dart-thin":
+        run("sh", "tools/j614s/pcie-dart-audit.sh", cwd=root)
+        dts = text(root / "arch/arm64/boot/dts/apple/t6040-j614s-pcie-dart.dts")
+        for marker in ("&pcie0", "&pcie0_dart_0", "&pcie0_dart_1", "&pinctrl_ap"):
+            assert_contains(dts, marker, f"PCIe/DART source missing {marker}")
+        assert_not_contains(dts, "pwren-gpios", "PCIe/DART-thin must not drive endpoint power")
+        resolved_config_and_dtb_check(root, "pcie-dart-thin",
+                                      "apple/t6040-j614s-pcie-dart.dtb", {
+            "CONFIG_SMP": "y",
+            "CONFIG_APPLE_DART": "y",
+            "CONFIG_PCIE_APPLE": "y",
+            "CONFIG_MFD_MACSMC": "n",
+            "CONFIG_BRCMFMAC": "n",
+            "CONFIG_MMC": "n",
+            "CONFIG_NVME_APPLE": "n",
+        })
+
+    elif gate == "smc-thin":
+        run("sh", "tools/j614s/pcie-dart-audit.sh", cwd=root)
+        run("sh", "tools/j614s/smc-audit.sh", cwd=root)
+        resolved_config_and_dtb_check(root, "smc-thin",
+                                      "apple/t6040-j614s-smc.dtb", {
+            "CONFIG_SMP": "y",
+            "CONFIG_APPLE_DART": "y",
+            "CONFIG_PCIE_APPLE": "y",
+            "CONFIG_APPLE_RTKIT": "y",
+            "CONFIG_MFD_MACSMC": "y",
+            "CONFIG_GPIO_MACSMC": "n",
+            "CONFIG_SENSORS_MACSMC_HWMON": "n",
+            "CONFIG_MACSMC_POWER": "n",
+            "CONFIG_RTC_DRV_MACSMC": "n",
+        })
+
+    elif gate == "wifi-bt":
+        run("sh", "tools/j614s/pcie-dart-audit.sh", cwd=root)
+        run("sh", "tools/j614s/smc-audit.sh", cwd=root)
+        run("sh", "tools/j614s/wifi-bt-audit.sh", cwd=root)
+        resolved_config_and_dtb_check(root, "wifi-bt",
+                                      "apple/t6040-j614s-wifi-bt.dtb", {
+            "CONFIG_SMP": "y",
+            "CONFIG_APPLE_DART": "y",
+            "CONFIG_PCIE_APPLE": "y",
+            "CONFIG_MFD_MACSMC": "y",
+            "CONFIG_GPIO_MACSMC": "y",
+            "CONFIG_BRCMFMAC": "m",
+            "CONFIG_BT_HCIBCM4377": "m",
+            "CONFIG_MMC": "n",
+            "CONFIG_NVME_APPLE": "n",
+        })
+
+    elif gate == "sd":
+        run("sh", "tools/j614s/pcie-dart-audit.sh", cwd=root)
+        run("sh", "tools/j614s/smc-audit.sh", cwd=root)
+        run("sh", "tools/j614s/sd-audit.sh", cwd=root)
+        resolved_config_and_dtb_check(root, "sd-thin",
+                                      "apple/t6040-j614s-sd.dtb", {
+            "CONFIG_SMP": "y",
+            "CONFIG_APPLE_DART": "y",
+            "CONFIG_PCIE_APPLE": "y",
+            "CONFIG_MFD_MACSMC": "y",
+            "CONFIG_GPIO_MACSMC": "y",
+            "CONFIG_MMC": "y",
+            "CONFIG_MMC_SDHCI_PCI": "m",
+            "CONFIG_BRCMFMAC": "n",
+            "CONFIG_BT": "n",
+            "CONFIG_NVME_APPLE": "n",
+        })
 
     else:
         die(f"source gate {gate!r} is not admitted for building")
