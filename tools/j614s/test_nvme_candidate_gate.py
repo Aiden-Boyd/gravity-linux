@@ -37,7 +37,7 @@ class NVMeCandidateGateTests(unittest.TestCase):
         self.addCleanup(td.cleanup)
         (linux / "drivers/nvme/host/apple.c").write_text(
             'APPLE_ANS_T8132_IOQ_CMDS APPLE_ANS_T8132_IOQ_CQES needs_ioq_register '
-            '"apple,t6040-nvme-ans2" mmio_nvmmu'
+            '"apple,t6040-nvme-ans2" mmio_nvmmu firmware_managed_queues'
         )
         (linux / "drivers/soc/apple/sart.c").write_text(
             'apple,t8140-sart APPLE_SART_POWER_ACTIVE APPLE_SART_POWER_INACTIVE sart_scan_entries'
