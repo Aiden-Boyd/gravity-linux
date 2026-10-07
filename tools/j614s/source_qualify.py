@@ -165,11 +165,26 @@ def resolved_config_and_dtb_check(root: pathlib.Path, kprofile: str,
     config = text(root / ".config")
     for symbol, state in expected.items():
         if state == "n":
-            marker = f"# {symbol} is not set"
+            # Kconfig may omit a symbol entirely when a parent dependency is
+            # disabled. For a fail-closed "must be off" assertion, both an
+            # explicit "# ... is not set" and total absence are valid; only
+            # y/m are forbidden.
+            enabled = re.search(
+                rf"(?m)^{re.escape(symbol)}=([ym])$",
+                config,
+            )
+            if enabled:
+                die(
+                    f"{kprofile}: resolved Kconfig unexpectedly enables "
+                    f"{symbol}={enabled.group(1)}"
+                )
         else:
             marker = f"{symbol}={state}"
-        assert_contains(config, marker,
-                        f"{kprofile}: resolved Kconfig does not contain {marker}")
+            assert_contains(
+                config,
+                marker,
+                f"{kprofile}: resolved Kconfig does not contain {marker}",
+            )
 
     run("make", "-j2", "ARCH=arm64", "LLVM=1", dtb_target, cwd=root)
     dtb_path = root / "arch/arm64/boot/dts/apple" / pathlib.Path(dtb_target).name
