@@ -33,10 +33,25 @@
       "path": "/arm-io/sgx",
       "compatible": "gpu,t6040",
       "registers": [
-        {"base": "0x88000000", "size": "0x03758000"},
-        {"base": "0x88d00000", "size": "0x0016c000"}
+        {
+          "base": "0x88000000",
+          "size": "0x03758000"
+        },
+        {
+          "base": "0x88d00000",
+          "size": "0x0016c000"
+        }
       ],
-      "interrupts_raw_adt": [1481, 1482, 1483, 1484, 1505, 1507, 1496, 1498],
+      "interrupts_raw_adt": [
+        1481,
+        1482,
+        1483,
+        1484,
+        1505,
+        1507,
+        1496,
+        1498
+      ],
       "performance": {
         "perf_state_count": 16,
         "perf_state_table_count": 2,
@@ -53,12 +68,28 @@
       "path": "/arm-io/gfx-asc",
       "compatible": "iop,ascwrap-v6",
       "registers": [
-        {"base": "0x8a600000", "size": "0x00088000"},
-        {"base": "0x8a050000", "size": "0x00060000"}
+        {
+          "base": "0x8a600000",
+          "size": "0x00088000"
+        },
+        {
+          "base": "0x8a050000",
+          "size": "0x00060000"
+        }
       ],
-      "interrupts_raw_adt": [1502, 1501, 1504, 1503],
+      "interrupts_raw_adt": [
+        1502,
+        1501,
+        1504,
+        1503
+      ],
       "linux_mailbox_semantic_candidate": {
-        "interrupts": [1501, 1502, 1503, 1504],
+        "interrupts": [
+          1501,
+          1502,
+          1503,
+          1504
+        ],
         "interrupt_names": [
           "send-empty",
           "send-not-empty",
@@ -70,12 +101,30 @@
       }
     },
     "reserved_regions": {
-      "gpu-region": {"base": "0x105fffb8000", "size": "0x4000"},
-      "gfx-handoff": {"base": "0x105fff70000", "size": "0x4000"},
-      "gfx-shared-region": {"base": "0x105fff78000", "size": "0x40000"},
-      "gfx-shared-l2-region": {"base": "0x105fff74000", "size": "0x4000"},
-      "gfx-data": {"base": "0x10001d34000", "size": "0x138000"},
-      "rtkit-private-vm-region": {"base": "0xfffffc0000000000", "size": "0x2000000000"}
+      "gpu-region": {
+        "base": "0x105fffb8000",
+        "size": "0x4000"
+      },
+      "gfx-handoff": {
+        "base": "0x105fff70000",
+        "size": "0x4000"
+      },
+      "gfx-shared-region": {
+        "base": "0x105fff78000",
+        "size": "0x40000"
+      },
+      "gfx-shared-l2-region": {
+        "base": "0x105fff74000",
+        "size": "0x4000"
+      },
+      "gfx-data": {
+        "base": "0x10001d34000",
+        "size": "0x138000"
+      },
+      "rtkit-private-vm-region": {
+        "base": "0xfffffc0000000000",
+        "size": "0x2000000000"
+      }
     }
   },
   "pmgr": {
@@ -104,7 +153,9 @@
         "offset": "0x110",
         "name": "gfx",
         "always_on": false,
-        "parents": ["ps_afr"]
+        "parents": [
+          "ps_afr"
+        ]
       }
     ]
   },
@@ -129,5 +180,48 @@
     "T6040 m1n1 dt_set_gpu calibration/UAT handoff",
     "Exact mapping from the six ADT reserved regions to the future T6040 Linux/m1n1 ABI",
     "Explicit Mesa G16/AGX2 userspace path"
-  ]
+  ],
+  "legacy_downstream_reference": {
+    "asahi_linux_branch": "bits/210-gpu",
+    "linux_driver": {
+      "supported_of_compatibles": [
+        "apple,agx-t8103",
+        "apple,agx-t8112",
+        "apple,agx-t6000",
+        "apple,agx-t6001",
+        "apple,agx-t6002",
+        "apple,agx-t6020",
+        "apple,agx-t6021",
+        "apple,agx-t6022"
+      ],
+      "named_mmio_resources": [
+        "sgx",
+        "asc"
+      ],
+      "note": "No T6040/G16 entry exists; the reference is schema evidence only."
+    },
+    "m1n1": {
+      "dt_set_gpu_supported_chips": [
+        "T8103",
+        "T8112",
+        "T6000",
+        "T6001",
+        "T6002",
+        "T6020",
+        "T6021",
+        "T6022"
+      ],
+      "adt_to_reserved_memory_mapping": {
+        "gfx-handoff": "/reserved-memory/uat-handoff",
+        "gfx-shared-region": "/reserved-memory/uat-pagetables",
+        "gpu-region": "/reserved-memory/uat-ttbs"
+      },
+      "dynamically_allocated_regions": [
+        "/reserved-memory/hw-cal-a",
+        "/reserved-memory/hw-cal-b",
+        "/reserved-memory/globals"
+      ],
+      "note": "Current m1n1 returns unsupported chip for T6040. These G13/G14 mappings and calibration layouts must not be assumed valid for G16."
+    }
+  }
 }
