@@ -6,8 +6,10 @@ source tree (809541515659bf4e504807fd72bc0a539be5eee7).
 
 Provenance: adapted from Project Wallace's hardware-verified J614s patch
 series by CJ Damsleth, especially patches 1, 3, 5, 6, and 8 of
-m1n1-t6040-upstream-v1. This script deliberately omits experimental PCIe,
-watchdog, display, storage, and USB policy changes.
+m1n1-t6040-upstream-v1. This script deliberately omits experimental PCIe
+enablement, watchdog, display, storage, and USB policy changes. The guarded
+first-boot stage1 explicitly skips T6040 PCIe initialization before Linux
+handoff so the SAFE profile cannot reach the unresolved PHY-IP path.
 """
 from pathlib import Path
 import sys
@@ -86,6 +88,24 @@ edit("src/smp.c",
     }
 
     wfe_mode = new_mode;
+""")
+
+# First-boot isolation: upstream v1.9.9 calls pcie_init() unconditionally
+# during kboot_boot(). Its generic T6040/T8132 path is not the exact-J614s
+# hardware-proven PCIe handoff and can reach the unresolved PHY-IP aperture.
+# SAFE must therefore stop m1n1 itself from touching PCIe before Linux starts.
+edit("src/kboot.c",
+"""    usb_init();
+    pcie_init();
+    dapf_init_all();
+""",
+"""    usb_init();
+    if (chip_id == T6040) {
+        printf("pcie: skipping T6040 initialization in guarded J614s first-boot stage1\\n");
+    } else {
+        pcie_init();
+    }
+    dapf_init_all();
 """)
 
 # T6040 DAPF: only dart-mtp is hardware-verified safe/required.

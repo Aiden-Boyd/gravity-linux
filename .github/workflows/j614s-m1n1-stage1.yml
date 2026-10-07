@@ -51,12 +51,13 @@ jobs:
           grep -q 'LOGBUF_TOP_GUARD_SIZE' m1n1/src/kboot.c
           grep -q 'mcc,t6041' m1n1/src/mcc.c
           grep -q 't6040_features' m1n1/src/cpufreq.c
+          grep -q 'skipping T6040 initialization in guarded J614s first-boot stage1' m1n1/src/kboot.c
           git -C m1n1 diff --check
           git -C m1n1 diff > m1n1-j614s-v1.9.9.diff
 
       - name: Build exact patched chainloading stage1 twice
         env:
-          M1N1_VERSION_TAG: v1.9.9-j614s.1
+          M1N1_VERSION_TAG: v1.9.9-j614s.2
         run: |
           make -C m1n1 -j2 ARCH=aarch64-linux-gnu- RELEASE=1 CHAINLOADING=1
           grep -qx '#define RELEASE' m1n1/build/build_cfg.h
@@ -67,26 +68,19 @@ jobs:
           make -C m1n1 -j2 ARCH=aarch64-linux-gnu- RELEASE=1 CHAINLOADING=1
           cmp /tmp/m1n1-stage1-first.bin m1n1/build/m1n1.bin
 
-          test "$(wc -c < m1n1/build/m1n1.bin)" -eq 3866624
-          sha256sum m1n1/build/m1n1.bin | tee m1n1-stage1-v1.9.9-j614s.sha256
-          test "$(sha256sum m1n1/build/m1n1.bin | awk '{print $1}')" = "40e9510d539fb539f09c1b944ab3d1c23f2d7f8ed604e1c200bedf5564249499"
-          strings m1n1/build/m1n1.bin | grep -Fq 'chosen.asahi,m1n1-stage1-version=v1.9.9-j614s.1'
+          SIZE="$(wc -c < m1n1/build/m1n1.bin | tr -d '[:space:]')"
+          SHA="$(sha256sum m1n1/build/m1n1.bin | awk '{print $1}')"
+          printf 'candidate-size=%s\ncandidate-sha256=%s\n' "$SIZE" "$SHA"
+          printf '%s  %s\n' "$SHA" "m1n1.bin" | tee m1n1-stage1-v1.9.9-j614s.2.sha256
+          strings m1n1/build/m1n1.bin | grep -Fq 'chosen.asahi,m1n1-stage1-version=v1.9.9-j614s.2'
 
-      - name: Verify immutable pinned binary
-        run: |
-          curl -fsSL -o /tmp/pinned-m1n1.bin \
-            "https://raw.githubusercontent.com/Aiden-Boyd/gravity-linux/a853472376b58b794637b43a9f34dc1ae76a7daa/tools/j614s/m1n1/m1n1-v1.9.9-j614s-chainloading.bin"
-          test "$(wc -c < /tmp/pinned-m1n1.bin)" -eq 3866624
-          echo "40e9510d539fb539f09c1b944ab3d1c23f2d7f8ed604e1c200bedf5564249499  /tmp/pinned-m1n1.bin" | sha256sum -c -
-          cmp m1n1/build/m1n1.bin /tmp/pinned-m1n1.bin
-
-      - name: Upload exact patched chainloading stage1
+      - name: Upload reproducible stage1 candidate
         uses: actions/upload-artifact@v4
         with:
-          name: m1n1-stage1-v1.9.9-j614s
+          name: m1n1-stage1-v1.9.9-j614s.2-candidate
           path: |
             m1n1/build/m1n1.bin
             m1n1/build/build_cfg.h
-            m1n1-stage1-v1.9.9-j614s.sha256
+            m1n1-stage1-v1.9.9-j614s.2.sha256
             m1n1-j614s-v1.9.9.diff
           if-no-files-found: error

@@ -46,13 +46,14 @@ jobs:
           grep -q 'LOGBUF_TOP_GUARD_SIZE' m1n1/src/kboot.c
           grep -q 'mcc,t6041' m1n1/src/mcc.c
           grep -q 't6040_features' m1n1/src/cpufreq.c
+          grep -q 'skipping T6040 initialization in guarded J614s first-boot stage1' m1n1/src/kboot.c
           git -C m1n1 diff --check
           git -C m1n1 diff > m1n1-j614s-v1.9.9.diff
 
       - name: Build stage1 twice reproducibly
         env:
           RUSTUP_TOOLCHAIN: 1.98.1
-          M1N1_VERSION_TAG: v1.9.9-j614s.1
+          M1N1_VERSION_TAG: v1.9.9-j614s.2
         run: |
           make -C m1n1 ARCH=aarch64-linux-gnu- RELEASE=1 CHAINLOADING=1 -j2
           cp m1n1/build/m1n1.bin /tmp/m1n1-first.bin
@@ -60,15 +61,16 @@ jobs:
           make -C m1n1 clean
           make -C m1n1 ARCH=aarch64-linux-gnu- RELEASE=1 CHAINLOADING=1 -j2
           cmp /tmp/m1n1-first.bin m1n1/build/m1n1.bin
-          sha256sum m1n1/build/m1n1.bin | tee m1n1-j614s-v1.9.9.sha256
-          test "$(wc -c < m1n1/build/m1n1.bin)" -eq 3866624
-          test "$(sha256sum m1n1/build/m1n1.bin | awk '{print $1}')" = "40e9510d539fb539f09c1b944ab3d1c23f2d7f8ed604e1c200bedf5564249499"
-          strings m1n1/build/m1n1.bin | grep -Fq 'chosen.asahi,m1n1-stage1-version=v1.9.9-j614s.1'
+          SIZE="$(wc -c < m1n1/build/m1n1.bin | tr -d '[:space:]')"
+          SHA="$(sha256sum m1n1/build/m1n1.bin | awk '{print $1}')"
+          printf 'candidate-size=%s\ncandidate-sha256=%s\n' "$SIZE" "$SHA"
+          printf '%s  %s\n' "$SHA" "m1n1.bin" | tee m1n1-j614s-v1.9.9.sha256
+          strings m1n1/build/m1n1.bin | grep -Fq 'chosen.asahi,m1n1-stage1-version=v1.9.9-j614s.2'
 
       - name: Upload patched stage1 candidate
         uses: actions/upload-artifact@v4
         with:
-          name: m1n1-stage1-v1.9.9-j614s
+          name: m1n1-stage1-v1.9.9-j614s.2-candidate
           path: |
             m1n1/build/m1n1.bin
             m1n1-j614s-v1.9.9.sha256
@@ -115,18 +117,234 @@ jobs:
           grep -q 'apple,t6041-pmgr-pwrstate' drivers/pmdomain/apple/pmgr-pwrstate.c
           grep -q 'skip_auto_enable' drivers/pmdomain/apple/pmgr-pwrstate.c
 
-          # Verify the immutable, reproducibly built chainloading stage-1
-          # consumed by the installer. Never substitute the upstream stage2 ZIP.
-          PINNED_STAGE1_COMMIT=a853472376b58b794637b43a9f34dc1ae76a7daa
-          PINNED_STAGE1_SHA=40e9510d539fb539f09c1b944ab3d1c23f2d7f8ed604e1c200bedf5564249499
-          PINNED_STAGE1_URL="https://raw.githubusercontent.com/Aiden-Boyd/gravity-linux/$PINNED_STAGE1_COMMIT/tools/j614s/m1n1/m1n1-v1.9.9-j614s-chainloading.bin"
-          curl -fsSL -o /tmp/m1n1-stage1.bin "$PINNED_STAGE1_URL"
-          echo "$PINNED_STAGE1_SHA  /tmp/m1n1-stage1.bin" | sha256sum -c -
-          test "$(wc -c < /tmp/m1n1-stage1.bin)" -eq 3866624
-          strings /tmp/m1n1-stage1.bin | grep -Fq 'chosen.asahi,m1n1-stage1-version=v1.9.9-j614s.1'
-          grep -q "M1N1_STAGE1_REPO_COMMIT=\"$PINNED_STAGE1_COMMIT\"" tools/j614s/installer/bootstrap.sh
-          grep -q "M1N1_STAGE1_SHA256=\"$PINNED_STAGE1_SHA\"" tools/j614s/installer/bootstrap.sh
-          grep -q 'EXPECTED_M1N1_VERSION="v1.9.9-j614s.1"' tools/j614s/installer/bootstrap.sh
+          # Candidate .2 is being rebuilt and repinned. Until its immutable
+          # hash is committed, normal install mode must fail closed.
+          grep -q '^STAGE1_REPIN_PENDING=1
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            bc bison build-essential clang cpio curl device-tree-compiler flex \
+            gcc-aarch64-linux-gnu kmod libc6-dev-arm64-cross \
+            libelf-dev libssl-dev lld llvm make
+
+          # Diagnostic/Yolo initramfs needs an interactive static ARM64 shell.
+          # Cross-build a pinned BusyBox release from its official source and
+          # verify the release checksum published alongside the tarball.
+          if [ "$PROFILE" != safe ]; then
+            BUSYBOX_VERSION=1.38.0
+            cd /tmp
+            curl -fsSLO "https://busybox.net/downloads/busybox-$BUSYBOX_VERSION.tar.bz2"
+            curl -fsSLO "https://busybox.net/downloads/busybox-$BUSYBOX_VERSION.tar.bz2.sha256"
+            sha256sum -c "busybox-$BUSYBOX_VERSION.tar.bz2.sha256"
+            tar xjf "busybox-$BUSYBOX_VERSION.tar.bz2"
+            cd "busybox-$BUSYBOX_VERSION"
+
+            make CROSS_COMPILE=aarch64-linux-gnu- defconfig
+            sed -i 's/# CONFIG_STATIC is not set/CONFIG_STATIC=y/' .config
+            # BusyBox tc still references legacy CBQ UAPI types removed from
+            # current Ubuntu cross headers. tc is unnecessary for this RAM
+            # bring-up shell, so keep it out of the diagnostic image.
+            sed -i 's/CONFIG_TC=y/# CONFIG_TC is not set/' .config
+            yes "" | make CROSS_COMPILE=aarch64-linux-gnu- oldconfig >/dev/null
+            make -j"$(nproc)" CROSS_COMPILE=aarch64-linux-gnu- busybox
+
+            mkdir -p /tmp/busybox-arm64/bin
+            cp busybox /tmp/busybox-arm64/bin/busybox
+            file /tmp/busybox-arm64/bin/busybox
+            readelf -h /tmp/busybox-arm64/bin/busybox | grep -q 'Machine:.*AArch64'
+            file /tmp/busybox-arm64/bin/busybox | grep -q 'statically linked'
+
+            cd "$GITHUB_WORKSPACE"
+          fi
+
+      - name: Configure J614s kernel profile
+        run: |
+          make ARCH=arm64 LLVM=1 defconfig
+          sh tools/j614s/ramboot-config.sh "$PROFILE"
+          make ARCH=arm64 LLVM=1 olddefconfig
+
+          grep -qx 'CONFIG_ARM64_16K_PAGES=y' .config
+          grep -qx 'CONFIG_SERIAL_SAMSUNG=y' .config
+          grep -qx 'CONFIG_SERIAL_SAMSUNG_CONSOLE=y' .config
+
+          echo "Resolved J614s profile symbols:"
+          grep -E '^CONFIG_(RFKILL|CFG80211|PINCTRL_APPLE_GPIO|APPLE_MAILBOX|APPLE_RTKIT|APPLE_RTKIT_HELPER|APPLE_DART|APPLE_SART|MFD_MACSMC|GPIO_MACSMC|APPLE_DOCKCHANNEL|HID_DOCKCHANNEL|PCIE_APPLE|NVME_APPLE|SPI_APPLE|BRCMFMAC|BRCMFMAC_PCIE|MMC_SDHCI|MMC_SDHCI_PCI|SND_SOC_APPLE_MCA|SND_SOC_APPLE_MACAUDIO|USB_XHCI_HCD)=' .config || true
+
+          case "$PROFILE" in
+            safe)
+              if grep -Eq '^CONFIG_(NVME_APPLE|PCIE_APPLE|APPLE_DART|MFD_MACSMC|HID_DOCKCHANNEL)=[ym]$' .config; then
+                echo "SAFE profile unexpectedly enabled a hardware-facing driver:" >&2
+                grep -E '^CONFIG_(NVME_APPLE|PCIE_APPLE|APPLE_DART|MFD_MACSMC|HID_DOCKCHANNEL)=' .config >&2 || true
+                exit 1
+              fi
+              ;;
+            diagnostic)
+              grep -qx 'CONFIG_APPLE_DART=m' .config
+              grep -qx 'CONFIG_PCIE_APPLE=m' .config
+              grep -qx 'CONFIG_MFD_MACSMC=m' .config
+              grep -qx 'CONFIG_GPIO_MACSMC=m' .config
+              grep -qx 'CONFIG_HID_DOCKCHANNEL=m' .config
+              grep -qx 'CONFIG_BRCMFMAC=m' .config
+              grep -qx 'CONFIG_MMC_SDHCI_PCI=m' .config
+              ;;
+            yolo)
+              grep -qx 'CONFIG_APPLE_DART=y' .config
+              grep -qx 'CONFIG_PCIE_APPLE=y' .config
+              grep -qx 'CONFIG_MFD_MACSMC=y' .config
+              grep -qx 'CONFIG_GPIO_MACSMC=y' .config
+              grep -qx 'CONFIG_HID_DOCKCHANNEL=y' .config
+              grep -qx 'CONFIG_BRCMFMAC=y' .config
+              grep -qx 'CONFIG_MMC_SDHCI_PCI=y' .config
+              ;;
+          esac
+
+      - name: Build kernel DTBs and modules
+        run: |
+          if [ "$PROFILE" = safe ]; then
+            # SAFE never installs or loads modules; avoid compiling the entire
+            # defconfig module set just to produce the first-boot kernel.
+            make -j"$(nproc)" ARCH=arm64 LLVM=1 \
+              Image \
+              apple/t6040-j614s.dtb \
+              apple/t6040-j614s-all.dtb
+          else
+            make -j"$(nproc)" ARCH=arm64 LLVM=1 \
+              Image modules \
+              apple/t6040-j614s.dtb \
+              apple/t6040-j614s-all.dtb
+          fi
+
+          gzip -n -9 -c arch/arm64/boot/Image > Image.gz
+
+          test -s arch/arm64/boot/dts/apple/t6040-j614s.dtb
+          test -s arch/arm64/boot/dts/apple/t6040-j614s-all.dtb
+
+          # The J614s keyboard/trackpad path requires the generic DockChannel
+          # binding plus an RTKit helper phandle. Keep CI from accepting a DT
+          # that compiles but can never bind to dockchannel-hid.
+          dtc -q -I dtb -O dts arch/arm64/boot/dts/apple/t6040-j614s-all.dtb > /tmp/j614s-all.dts
+          grep -q 'apple,dockchannel-hid' /tmp/j614s-all.dts
+          grep -q 'apple,helper-cpu' /tmp/j614s-all.dts
+          grep -q 'apple,rtk-helper-asc4' /tmp/j614s-all.dts
+          # The ADT stores not-empty first, but Linux interrupt-names are
+          # empty/not-empty. Assert the semantic Linux mapping proven on J614s.
+          python3 -c 'import re; t=open("arch/arm64/boot/dts/apple/t6040.dtsi").read(); m=re.search(r"mtp_mbox:\s*mailbox@514608000\s*\{(.*?)\n\s*\};", t, re.S); assert m, "missing J614s MTP mailbox node"; irqs=[int(x) for x in re.findall(r"<AIC_IRQ\s+(\d+)\s+IRQ_TYPE_LEVEL_HIGH>", m.group(1))]; assert irqs[:4] == [792,793,794,795], irqs[:4]; assert "\"send-empty\", \"send-not-empty\"" in m.group(1) and "\"recv-empty\", \"recv-not-empty\"" in m.group(1), "bad MTP interrupt-names"'
+
+      - name: Build RAM-only initramfs
+        run: |
+          rm -rf ramroot
+          mkdir -p ramroot/{proc,sys,dev,etc,bin,sbin,run,tmp}
+
+          if [ "$PROFILE" = safe ]; then
+            aarch64-linux-gnu-gcc -static -Os -s \
+              tools/j614s/ramboot-init.c -o ramroot/init
+            file ramroot/init
+            readelf -h ramroot/init | grep -q 'Machine:.*AArch64'
+          else
+            cp /tmp/busybox-arm64/bin/busybox ramroot/bin/busybox
+            chmod 0755 ramroot/bin/busybox
+            cp tools/j614s/ramboot-shell-init.sh ramroot/init
+            chmod 0755 ramroot/init
+            printf '%s\n' "$PROFILE" > ramroot/etc/j614s-profile
+
+            KREL="$(make -s ARCH=arm64 LLVM=1 kernelrelease)"
+            make ARCH=arm64 LLVM=1 \
+              INSTALL_MOD_PATH="$PWD/ramroot" \
+              INSTALL_MOD_STRIP=1 \
+              modules_install
+            rm -f "ramroot/lib/modules/$KREL/build" \
+                  "ramroot/lib/modules/$KREL/source"
+            depmod -b ramroot "$KREL"
+
+            # The init script uses the static BusyBox as its interpreter.
+            readelf -h ramroot/bin/busybox | grep -q 'Machine:.*AArch64'
+
+            find "ramroot/lib/modules/$KREL" -type f \
+              \( -name '*.ko' -o -name '*.ko.xz' -o -name '*.ko.zst' \) \
+              | sort > /tmp/modules.txt
+            test -s /tmp/modules.txt
+          fi
+
+          (
+            cd ramroot
+            find . -print0 | sort -z | cpio --null -o --format=newc
+          ) | gzip -n -9 > "initramfs-j614s-$PROFILE.cpio.gz"
+
+      - name: Stage boot bundle
+        run: |
+          OUT="j614s-ramboot-$PROFILE"
+          mkdir -p "$OUT"
+
+          cp Image.gz "$OUT/"
+          cp "initramfs-j614s-$PROFILE.cpio.gz" "$OUT/initramfs.cpio.gz"
+          cp .config "$OUT/kernel.config"
+          cp tools/j614s/RAMBOOT_LOAD_ORDER.txt "$OUT/LOAD_ORDER.txt"
+          cp tools/j614s/tethered-boot.sh "$OUT/BOOT_FROM_HOST.sh"
+          chmod 0755 "$OUT/BOOT_FROM_HOST.sh"
+          printf '%s\n' "$PROFILE" > "$OUT/PROFILE.txt"
+
+          if [ "$PROFILE" = safe ]; then
+            cp arch/arm64/boot/dts/apple/t6040-j614s.dtb "$OUT/t6040-j614s.dtb"
+            cat > "$OUT/BOOTARGS.txt" <<'EOF'
+          earlycon=apple,s5l-uart console=ttySAC0,1500000 keep_bootcon ignore_loglevel loglevel=8 rdinit=/init panic=0 idle=nop arm64.nowfxt nr_cpus=1 maxcpus=1
+          EOF
+          elif [ "$PROFILE" = diagnostic ]; then
+            cp arch/arm64/boot/dts/apple/t6040-j614s-all.dtb "$OUT/t6040-j614s.dtb"
+            cat > "$OUT/BOOTARGS.txt" <<'EOF'
+          earlycon=apple,s5l-uart console=ttySAC0,1500000 keep_bootcon ignore_loglevel loglevel=8 rdinit=/init panic=0 idle=nop arm64.nowfxt nr_cpus=1 maxcpus=1
+          EOF
+          else
+            cp arch/arm64/boot/dts/apple/t6040-j614s-all.dtb "$OUT/t6040-j614s.dtb"
+            cat > "$OUT/BOOTARGS.txt" <<'EOF'
+          earlycon=apple,s5l-uart console=ttySAC0,1500000 keep_bootcon ignore_loglevel loglevel=8 rdinit=/init panic=0 idle=nop arm64.nowfxt nr_cpus=1 maxcpus=1
+          EOF
+          fi
+
+          cat > "$OUT/README.txt" <<EOF
+          J614s RAM boot profile: $PROFILE
+
+          SAFE:
+            Minimal single-CPU UART/initramfs baseline. PCIe, DART, SMC,
+            DockChannel HID, Wi-Fi, MMC, USB and NVMe are disabled.
+
+          DIAGNOSTIC:
+            Single CPU. Reviewed J614s SMC, MTP/input, PCIe port 0 Wi-Fi/BT
+            and PCIe port 1 GL9755 SD nodes are enabled in the DTB, but their
+            drivers are modules in the RAM initramfs. Load them manually using
+            LOAD_ORDER.txt and inspect dmesg after every step.
+
+          YOLO:
+            Reviewed J614s SMC, MTP/input, PCIe/Wi-Fi/SD nodes are enabled and
+            available drivers are built in, so they probe automatically. It
+            remains single-CPU because J614s SMP is not yet reliable. No
+            persistent filesystem is mounted by the initramfs.
+
+          M4 safety:
+            All current profiles force one CPU plus idle=nop + arm64.nowfxt.
+            This avoids the known T6040 WFI/WFIT state-loss path and the
+            still-unresolved J614s multi-core page-copy/MM failure.
+
+          Current limitation:
+            This tree still has no reviewed J614s/T6040 NVMe, USB, DCP/GPU or
+            audio hardware nodes. Their available drivers may be compiled, but
+            this bundle does not invent unverified MMIO/IRQ descriptions.
+          EOF
+
+          for required_arg in panic=0 idle=nop arm64.nowfxt nr_cpus=1 maxcpus=1; do
+            grep -qw "$required_arg" "$OUT/BOOTARGS.txt"
+          done
+
+          sha256sum "$OUT"/* > "$OUT/SHA256SUMS"
+
+      - name: Upload RAM boot bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: j614s-ramboot-${{ matrix.profile }}
+          path: j614s-ramboot-${{ matrix.profile }}/
+          if-no-files-found: error
+ tools/j614s/installer/bootstrap.sh
+          grep -q 'stage1 v1.9.9-j614s.2 repin is pending' tools/j614s/installer/bootstrap.sh
           ! grep -q 'm1n1-stage2-v1.9.9' tools/j614s/installer/bootstrap.sh
 
       - name: Install build dependencies

@@ -51,6 +51,10 @@ M1N1_STAGE1_URL="https://raw.githubusercontent.com/Aiden-Boyd/gravity-linux/$M1N
 M1N1_STAGE1_SHA256="40e9510d539fb539f09c1b944ab3d1c23f2d7f8ed604e1c200bedf5564249499"
 M1N1_STAGE1_SIZE="3866624"
 
+# Fail closed while the guarded .2 stage1 is being reproducibly rebuilt and
+# pinned. Read-only --probe/--deep-probe remain available.
+STAGE1_REPIN_PENDING=1
+
 IPSW_TOOL_VERSION="3.1.730"
 IPSW_TOOL_ARCHIVE="ipsw_3.1.730_macOS_arm64.tar.gz"
 IPSW_TOOL_URL="https://github.com/blacktop/ipsw/releases/download/v3.1.730/$IPSW_TOOL_ARCHIVE"
@@ -67,6 +71,10 @@ echo "It creates an Asahi-style stub boot environment and enrolls m1n1."
 echo "It does NOT install a Linux root filesystem and does NOT enable NVMe,"
 echo "Wi-Fi, Bluetooth, SD, USB, or other experimental J614s hardware."
 echo
+
+if [ "$MODE" = "install" ] && [ "$STAGE1_REPIN_PENDING" = "1" ]; then
+    fail "stage1 v1.9.9-j614s.2 repin is pending; normal install is intentionally blocked"
+fi
 
 [ "$(uname -s)" = "Darwin" ] || fail "this bootstrap must run from macOS"
 [ "$(uname -m)" = "arm64" ] || fail "this bootstrap requires Apple silicon"
