@@ -39,6 +39,10 @@ than every experiment ticket. It is a bring-up ledger, not a support promise.
 - ARM64 `arm64.nowfxt` ID-register override exists.
 - Apple cpufreq kHz-to-Hz conversion uses `1000UL`, avoiding the M4 Pro
   >4.294 GHz 32-bit overflow.
+- BCM4388 scan parsing accepts Apple firmware's hardware-proven BSS-info v116.
+- Diagnostic/YOLO profiles explicitly build the BCM4388 PCIe Bluetooth HCI
+  driver and Apple cpufreq driver; YOLO promotes RFKILL before Bluetooth so
+  Kconfig cannot silently demote Bluetooth to a module.
 - J614s MTP helper/DockChannel topology and the SMC GPIO dependency are
   represented in the reviewed diagnostic DT.
 - Panic policy is `panic=0` for bring-up so failures remain visible.
@@ -69,6 +73,11 @@ than every experiment ticket. It is a bring-up ledger, not a support promise.
   and `starting` is cleared on ready and timeout so a failed start can retry.
 
 ## Driver hardening queue
+
+The RAM diagnostic image now includes `j614s-diag`, a staged helper that
+loads only the requested subsystem and prints a compact state/log snapshot.
+It never has an "all" mode: PCIe, SD, Wi-Fi, Bluetooth and input remain
+separate experiments so a failure can be attributed to the last step.
 
 - **DockChannel receive re-arm:** header-read/allocation failures now return
   through the common re-arm path so one transient error cannot silently stop

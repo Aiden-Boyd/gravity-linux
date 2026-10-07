@@ -31,6 +31,10 @@ Internal PCIe fabric (ports 0/1 only):
 After PCIe enumeration:
   lspci 2>/dev/null || ls /sys/bus/pci/devices
 
+CPU frequency:
+  modprobe apple-soc-cpufreq
+  ls /sys/devices/system/cpu/cpufreq 2>/dev/null || true
+
 SD reader:
   modprobe sdhci-pci
 
@@ -38,6 +42,22 @@ Wi-Fi:
   modprobe brcmfmac
   # Firmware blobs are intentionally NOT bundled. A firmware request failure
   # is still useful evidence that PCIe + brcmfmac reached the device.
+  # J614s BCM4388 firmware reports BSS-info v116; this kernel accepts it.
+
+Bluetooth:
+  modprobe hci_bcm4377
+  ls /sys/class/bluetooth 2>/dev/null || true
+  # Apple Bluetooth firmware is also intentionally not redistributed.
+
+Shortcut:
+  j614s-diag report
+  j614s-diag smc
+  j614s-diag input
+  j614s-diag cpufreq
+  j614s-diag pcie
+  j614s-diag sd
+  j614s-diag wifi
+  j614s-diag bt
 
 Compiled for future nodes / probing, but the current reviewed J614s DT does
 not describe the hardware block yet:

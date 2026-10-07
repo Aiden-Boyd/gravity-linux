@@ -28,6 +28,8 @@ echo "  ls /sys/bus/platform/devices"
 echo "  ls /sys/bus/pci/devices"
 echo "  ls /sys/block"
 echo "  modprobe <module>          # FULL-DIAGNOSTIC only"
+echo "  j614s-diag report          # passive capability snapshot"
+echo "  j614s-diag <subsystem>     # staged diagnostic helper"
 echo "  poweroff -f                # or physically power-cycle"
 echo
 

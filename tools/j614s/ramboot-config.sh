@@ -80,6 +80,8 @@ diagnostic|yolo)
 		module CONFIG_SPI_APPLE
 		module CONFIG_BRCMFMAC
 		enable CONFIG_BRCMFMAC_PCIE
+		module CONFIG_BT_HCIBCM4377
+		module CONFIG_ARM_APPLE_SOC_CPUFREQ
 		module CONFIG_MMC_SDHCI
 		module CONFIG_MMC_SDHCI_PCI
 		module CONFIG_SND_SOC_APPLE_MCA
@@ -92,6 +94,11 @@ diagnostic|yolo)
 		# built-in too so Wi-Fi can actually probe automatically.
 		enable CONFIG_RFKILL
 		enable CONFIG_CFG80211
+		# BT depends on RFKILL || !RFKILL. Re-promote it only after
+		# RFKILL=y so the exact BCM4388 PCIe HCI driver can be built in.
+		enable CONFIG_BT
+		enable CONFIG_BT_HCIBCM4377
+		enable CONFIG_ARM_APPLE_SOC_CPUFREQ
 		enable CONFIG_PINCTRL_APPLE_GPIO
 		enable CONFIG_APPLE_MAILBOX
 		enable CONFIG_APPLE_RTKIT
