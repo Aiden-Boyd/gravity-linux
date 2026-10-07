@@ -4,7 +4,7 @@
 
 set -eu
 
-PROFILE=${1:?usage: ramboot-config.sh safe|diagnostic|yolo|smp-thin|pcie-dart-thin|smc-thin}
+PROFILE=${1:?usage: ramboot-config.sh safe|diagnostic|yolo|smp-thin|pcie-dart-thin|smc-thin|wifi-bt}
 CFG=scripts/config
 
 enable() { "$CFG" --enable "$1"; }
@@ -94,6 +94,43 @@ smc-thin)
 	disable CONFIG_BRCMFMAC
 	disable CONFIG_WLAN
 	disable CONFIG_BT
+	disable CONFIG_MMC
+	disable CONFIG_USB
+	;;
+
+wifi-bt)
+	# Add only BCM4388 port00/gP13 on top of the SMC transport. Endpoint
+	# drivers remain modular so power/enumeration and driver probe are separable.
+	enable CONFIG_MODULES
+	enable CONFIG_PM
+	enable CONFIG_PCI
+	enable CONFIG_PCI_MSI
+	enable CONFIG_IOMMU_SUPPORT
+	enable CONFIG_PINCTRL
+	enable CONFIG_PINCTRL_APPLE_GPIO
+	enable CONFIG_APPLE_DART
+	enable CONFIG_PCIE_APPLE
+	enable CONFIG_APPLE_MAILBOX
+	enable CONFIG_APPLE_RTKIT
+	enable CONFIG_MFD_MACSMC
+	enable CONFIG_GPIO_MACSMC
+	enable CONFIG_NET
+	enable CONFIG_WLAN
+	enable CONFIG_RFKILL
+	enable CONFIG_CFG80211
+	enable CONFIG_BT
+	enable CONFIG_BRCMFMAC_PCIE
+	module CONFIG_BRCMFMAC
+	module CONFIG_BT_HCIBCM4377
+	disable CONFIG_SENSORS_MACSMC_HWMON
+	disable CONFIG_MACSMC_POWER
+	disable CONFIG_INPUT_MACSMC_INPUT
+	disable CONFIG_RTC_DRV_MACSMC
+	disable CONFIG_POWER_RESET_MACSMC
+	disable CONFIG_NVME_APPLE
+	disable CONFIG_BLK_DEV_NVME
+	disable CONFIG_APPLE_DOCKCHANNEL
+	disable CONFIG_HID_DOCKCHANNEL
 	disable CONFIG_MMC
 	disable CONFIG_USB
 	;;
