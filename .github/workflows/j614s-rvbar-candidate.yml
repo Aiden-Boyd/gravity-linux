@@ -52,7 +52,7 @@ jobs:
           git -C m1n1 diff --check
           # This candidate changes only m1n1 sources; installer/bootstrap stay pinned.
           git -C m1n1 diff > candidate-m1n1-source.diff
-          ! git -C gravity diff --quiet -- tools/j614s/installer/bootstrap.sh || {
+          git -C gravity diff --quiet -- tools/j614s/installer/bootstrap.sh || {
             echo 'Unexpected bootstrap modification'; exit 1;
           }
 
