@@ -9,7 +9,7 @@ set -u
 
 usage()
 {
-    echo "usage: j614s-diag report|smc|input|cpufreq|pcie|sd|wifi|bt" >&2
+    echo "usage: j614s-diag report|smc|battery|sensors|lid|input|cpufreq|pcie|sd|wifi|bt" >&2
     exit 2
 }
 
@@ -60,6 +60,18 @@ show_state()
     for b in /sys/block/*; do
         [ -e "$b" ] && echo "${b##*/}"
     done
+    echo "--- POWER ---"
+    for p in /sys/class/power_supply/*; do
+        [ -d "$p" ] || continue
+        echo "${p##*/}"
+        grep -E '^(POWER_SUPPLY_(STATUS|CAPACITY|ONLINE|HEALTH|VOLTAGE_NOW|CURRENT_NOW))=' "$p/uevent" 2>/dev/null || true
+    done
+    echo "--- HWMON ---"
+    for h in /sys/class/hwmon/*; do
+        [ -d "$h" ] || continue
+        printf "%s " "${h##*/}"
+        cat "$h/name" 2>/dev/null || true
+    done
     echo "--- CPUFREQ ---"
     for p in /sys/devices/system/cpu/cpufreq/policy*; do
         [ -d "$p" ] || continue
@@ -94,12 +106,26 @@ report)
 smc)
     load_smc || exit $?
     ;;
+battery)
+    load_smc &&
+    load macsmc-power || exit $?
+    ;;
+sensors)
+    load_smc &&
+    load macsmc-hwmon || exit $?
+    ;;
+lid)
+    load_smc &&
+    load macsmc-input || exit $?
+    ;;
 input)
     load apple-dart &&
     load apple-mailbox &&
     load apple-rtkit &&
     load apple-dockchannel &&
     load apple-rtkit-helper &&
+    load hid-apple &&
+    load hid-magicmouse &&
     load dockchannel-hid || exit $?
     ;;
 cpufreq)
