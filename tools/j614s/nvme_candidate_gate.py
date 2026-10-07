@@ -47,12 +47,18 @@ def check_linux(root):
     ]
 
 def check_m1n1(root):
-    nvme = read(pathlib.Path(root) / "src/nvme.c")
+    root = pathlib.Path(root)
+    nvme = read(root / "src/nvme.c")
+    kboot = read(root / "src/kboot.c")
     checks = {
         "M4 secure-bar detection": "nvme-secure-bar" in nvme,
         "M4 reg[9] controller selection": bool(re.search(r'adt_get_reg\([^\n]*9\s*,\s*&nvme_base', nvme)),
         "M4 IOQ setup": all(x in nvme for x in ("NVME_T8132","NVME_IOQ_CMDS","NVME_IOQ_CQES")),
         "NVMMU DMA direction": all(x in nvme for x in ("NVMMU_TCB_DMA_FROM_DEVICE","NVMMU_TCB_DMA_TO_DEVICE")),
+        "clean ANS handoff before Linux": (
+            "nvme_ensure_shutdown();" in kboot
+            or bool(re.search(r"if\s*\(!nvme_initialized\)[\s\S]{0,160}nvme_ensure_shutdown\(\);", nvme))
+        ),
     }
     return [Check("m1n1",k,v,"present" if v else "missing") for k,v in checks.items()]
 
