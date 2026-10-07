@@ -1,0 +1,9 @@
+{
+  "dt_compatible": "apple,agx-t6040",
+  "firmware_abi_or_build": "REPLACE_WITH_MAINTAINER_SPECIFIED_G16_ABI_OR_BUILD",
+  "first_test_scope": "G0 probe-only; no userspace render node open",
+  "crash_recovery": "REPLACE_WITH_CANDIDATE_SPECIFIC_RECOVERY_INSTRUCTIONS",
+  "m1n1_commit": "REPLACE_WITH_IMMUTABLE_COMMIT",
+  "linux_commit": "REPLACE_WITH_IMMUTABLE_COMMIT",
+  "mesa_commit": "REPLACE_WITH_IMMUTABLE_COMMIT"
+}
