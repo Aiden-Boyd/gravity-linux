@@ -6,10 +6,10 @@ source tree (809541515659bf4e504807fd72bc0a539be5eee7).
 
 Provenance: adapted from Project Wallace's hardware-verified J614s patch
 series by CJ Damsleth, especially patches 1, 3, 5, 6, and 8 of
-m1n1-t6040-upstream-v1. This script deliberately omits experimental PCIe
-enablement, watchdog, display, storage, and USB policy changes. The guarded
-first-boot stage1 explicitly skips T6040 PCIe initialization before Linux
-handoff so the SAFE profile cannot reach the unresolved PHY-IP path.
+m1n1-t6040-upstream-v1. This script deliberately omits watchdog, display,
+storage, and USB policy changes. Upstream v1.9.9 already carries the
+hardware-proven T6040 PCIe reset-bit fix; the guarded stage1 runs that PCIe
+path only when the supplied Linux DT explicitly enables apple,t6040-pcie.
 """
 from pathlib import Path
 import sys
@@ -90,18 +90,39 @@ edit("src/smp.c",
     wfe_mode = new_mode;
 """)
 
-# First-boot isolation: upstream v1.9.9 calls pcie_init() unconditionally
-# during kboot_boot(). Its generic T6040/T8132 path is not the exact-J614s
-# hardware-proven PCIe handoff and can reach the unresolved PHY-IP aperture.
-# SAFE must therefore stop m1n1 itself from touching PCIe before Linux starts.
+# First-boot isolation without breaking the later diagnostic profile.
+# Upstream v1.9.9's T6040 PCIe path contains the hardware-proven BIT(4)
+# PHY-reset fix used successfully on J614s. SAFE keeps the Linux PCIe node
+# disabled, so stage1 must not touch PCIe. Diagnostic/yolo explicitly enable
+# apple,t6040-pcie and therefore request the proven one-shot m1n1 handoff.
+edit("src/kboot.c",
+"""int kboot_boot(void *kernel)
+{
+""",
+"""static bool t6040_pcie_requested(void)
+{
+    int node = fdt_node_offset_by_compatible(dt, -1, "apple,t6040-pcie");
+    int len = 0;
+    const char *status;
+
+    if (node < 0)
+        return false;
+
+    status = fdt_getprop(dt, node, "status", &len);
+    return !status || !strcmp(status, "okay") || !strcmp(status, "ok");
+}
+
+int kboot_boot(void *kernel)
+{
+""")
 edit("src/kboot.c",
 """    usb_init();
     pcie_init();
     dapf_init_all();
 """,
 """    usb_init();
-    if (chip_id == T6040) {
-        printf("pcie: skipping T6040 initialization in guarded J614s first-boot stage1\\n");
+    if (chip_id == T6040 && !t6040_pcie_requested()) {
+        printf("pcie: T6040 disabled by target DT; leaving PCIe untouched\\n");
     } else {
         pcie_init();
     }
