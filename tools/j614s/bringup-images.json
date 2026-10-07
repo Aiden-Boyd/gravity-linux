@@ -32,55 +32,63 @@
       "source_commit": "ce26bb010a0807499002126407b5ab7422576ea7",
       "source_gate": "smp-thin",
       "build_enabled": true,
-      "boot_after": ["safe"],
+      "boot_after": [
+        "safe"
+      ],
       "risk": "experimental"
     },
     {
       "id": "pcie-dart-thin",
       "order": 30,
       "purpose": "PCIe + DART enumeration without endpoint power-up",
-      "source_branch": null,
-      "source_commit": null,
+      "source_branch": "j614s-pcie-dart-prep-v1",
+      "source_commit": "096bb30880bb7dff162174e175b9c79f92b02fb8",
       "source_gate": "pcie-dart-thin",
-      "build_enabled": false,
-      "blocked_reason": "Dedicated isolated source profile has not been authored and qualified yet.",
-      "boot_after": ["smp-thin"],
+      "build_enabled": true,
+      "boot_after": [
+        "smp-thin"
+      ],
       "risk": "experimental"
     },
     {
       "id": "smc-thin",
       "order": 40,
       "purpose": "SMC/RTKit bring-up without PCIe endpoint power consumers",
-      "source_branch": null,
-      "source_commit": null,
+      "source_branch": "j614s-smc-prep-v1",
+      "source_commit": "0622dcd91aab68707fb363f3947aa304687b7238",
       "source_gate": "smc-thin",
-      "build_enabled": false,
-      "blocked_reason": "Dedicated isolated source profile has not been authored and qualified yet.",
-      "boot_after": ["pcie-dart-thin"],
+      "build_enabled": true,
+      "boot_after": [
+        "pcie-dart-thin"
+      ],
       "risk": "experimental"
     },
     {
       "id": "wifi-bt",
       "order": 50,
       "purpose": "BCM4388 Wi-Fi/BT power-up and PCIe path",
-      "source_branch": null,
-      "source_commit": null,
+      "source_branch": "j614s-wifi-bt-prep-v1",
+      "source_commit": "cc9a8bbb838616a251a57029584658a072b01e28",
       "source_gate": "wifi-bt",
-      "build_enabled": false,
-      "blocked_reason": "Must isolate the gP13 power path and known high-core-count confounders first.",
-      "boot_after": ["smc-thin", "pcie-dart-thin"],
+      "build_enabled": true,
+      "boot_after": [
+        "smc-thin",
+        "pcie-dart-thin"
+      ],
       "risk": "high"
     },
     {
       "id": "sd",
       "order": 60,
       "purpose": "GL9755 SD reader and gP19 power path",
-      "source_branch": null,
-      "source_commit": null,
+      "source_branch": "j614s-sd-prep-v1",
+      "source_commit": "c2e40a525e362daa0311b18a999abca1615506c8",
       "source_gate": "sd",
-      "build_enabled": false,
-      "blocked_reason": "Dedicated source profile has not been authored and qualified yet.",
-      "boot_after": ["smc-thin", "pcie-dart-thin"],
+      "build_enabled": true,
+      "boot_after": [
+        "smc-thin",
+        "pcie-dart-thin"
+      ],
       "risk": "experimental"
     },
     {
@@ -92,7 +100,10 @@
       "source_gate": "nvme-readonly",
       "build_enabled": false,
       "blocked_reason": "Prep branch exists, but the explicit T6040 controller/NVMMU resource contract is still gated.",
-      "boot_after": ["pcie-dart-thin", "smc-thin"],
+      "boot_after": [
+        "pcie-dart-thin",
+        "smc-thin"
+      ],
       "risk": "high"
     },
     {
@@ -104,7 +115,9 @@
       "source_gate": "input",
       "build_enabled": false,
       "blocked_reason": "Needs a dedicated isolated profile instead of borrowing FULL-DIAGNOSTIC.",
-      "boot_after": ["safe"],
+      "boot_after": [
+        "safe"
+      ],
       "risk": "experimental"
     },
     {
@@ -116,7 +129,9 @@
       "source_gate": "power",
       "build_enabled": false,
       "blocked_reason": "Needs isolated SMC consumer source profile and qualification.",
-      "boot_after": ["smc-thin"],
+      "boot_after": [
+        "smc-thin"
+      ],
       "risk": "experimental"
     },
     {
@@ -127,7 +142,12 @@
       "source_commit": "12845e504209b054bd04391c47e1733fd7b38f20",
       "source_gate": "diagnostic",
       "build_enabled": true,
-      "boot_after": ["input", "power", "wifi-bt", "sd"],
+      "boot_after": [
+        "input",
+        "power",
+        "wifi-bt",
+        "sd"
+      ],
       "risk": "experimental"
     },
     {
@@ -138,7 +158,9 @@
       "source_commit": "12845e504209b054bd04391c47e1733fd7b38f20",
       "source_gate": "yolo",
       "build_enabled": true,
-      "boot_after": ["full-diagnostic"],
+      "boot_after": [
+        "full-diagnostic"
+      ],
       "risk": "highest"
     },
     {
@@ -150,7 +172,9 @@
       "source_gate": "gpu-native",
       "build_enabled": false,
       "blocked_reason": "Asahi currently lists T604x GPU support as TBA and the explicit G16 stack is not admitted.",
-      "boot_after": ["full-diagnostic"],
+      "boot_after": [
+        "full-diagnostic"
+      ],
       "risk": "blocked"
     }
   ]
