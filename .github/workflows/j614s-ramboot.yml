@@ -127,6 +127,9 @@ jobs:
           grep -q 'apple,antenna-sku = "X3"' arch/arm64/boot/dts/apple/t6040-j614s-all.dts
           grep -q 'pwren-gpios = <&smc_gpio 0x13 GPIO_ACTIVE_HIGH>' arch/arm64/boot/dts/apple/t6040-j614s-all.dts
           grep -q 'pwren-gpios = <&smc_gpio 0x19 GPIO_ACTIVE_HIGH>' arch/arm64/boot/dts/apple/t6040-j614s-all.dts
+          grep -q 'cpufreq@210e20000' arch/arm64/boot/dts/apple/t6040-j614s-all.dts
+          grep -q '4512000000' arch/arm64/boot/dts/apple/t6040-j614s-all.dts
+          grep -q 'performance-domains = <&cpufreq_p0>' arch/arm64/boot/dts/apple/t6040-j614s-all.dts
 
           # A new stage1 candidate is being rebuilt and repinned. Until its
           # immutable hash is committed, normal install mode must fail closed.
