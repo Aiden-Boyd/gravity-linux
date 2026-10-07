@@ -104,6 +104,14 @@ jobs:
           sh -n tools/j614s/ramboot-diag.sh
           sh -n tools/j614s/installer/bootstrap.sh
           python3 -m py_compile tools/j614s/installer/*.py
+          python3 -m py_compile tools/j614s/m1n1/collect-gpu-adt.py
+
+          # Pin the read-only T6040/G16 evidence packet. These are ADT facts,
+          # not permission to create or probe a native GPU DT node.
+          python3 -c 'import json; d=json.load(open("tools/j614s/t6040-gpu-evidence.json")); assert d["machine"] == {"model":"Mac16,8","board":"J614s","soc":"T6040","gpu_generation":"G16"}; assert d["safety"]["do_not_probe"] is True; assert d["adt"]["sgx"]["compatible"] == "gpu,t6040"; assert d["adt"]["sgx"]["interrupts_raw_adt"] == [1481,1482,1483,1484,1505,1507,1496,1498]; assert d["adt"]["gfx_asc"]["interrupts_raw_adt"] == [1502,1501,1504,1503]; assert d["adt"]["gfx_asc"]["linux_mailbox_semantic_candidate"]["interrupts"] == [1501,1502,1503,1504]'
+          grep -q 'ps_gpx: power-controller@0' arch/arm64/boot/dts/apple/t6040-pmgr.dtsi
+          grep -q 'ps_afr: power-controller@100' arch/arm64/boot/dts/apple/t6040-pmgr.dtsi
+          grep -q 'ps_gfx: power-controller@110' arch/arm64/boot/dts/apple/t6040-pmgr.dtsi
 
           # M4 bare-metal safety support must exist in the kernel and loader.
           grep -q 'early_param("idle", setup_idle);' arch/arm64/kernel/idle.c
