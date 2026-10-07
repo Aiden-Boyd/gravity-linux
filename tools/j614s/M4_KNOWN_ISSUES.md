@@ -43,6 +43,12 @@ than every experiment ticket. It is a bring-up ledger, not a support promise.
 - Diagnostic/YOLO profiles explicitly build the BCM4388 PCIe Bluetooth HCI
   driver and Apple cpufreq driver; YOLO promotes RFKILL before Bluetooth so
   Kconfig cannot silently demote Bluetooth to a module.
+- J614s input profiles explicitly build hid-apple plus hid-magicmouse and
+  hid-multitouch. The MTP trackpad is a BUS_HOST Apple HID device and is
+  handled by hid-magicmouse, not by hid-multitouch alone.
+- SMC diagnostic profiles include lid/power-button input, battery/AC telemetry
+  and hwmon sensors; the reset/RTC/SPMI path remains separately gated until
+  the exact J614s NVMEM cell description is reviewed.
 - J614s MTP helper/DockChannel topology and the SMC GPIO dependency are
   represented in the reviewed diagnostic DT.
 - Panic policy is `panic=0` for bring-up so failures remain visible.

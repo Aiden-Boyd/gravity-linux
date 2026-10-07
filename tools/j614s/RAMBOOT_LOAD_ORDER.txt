@@ -18,12 +18,24 @@ Then load in dependency order, checking dmesg after EVERY command:
   modprobe macsmc
   modprobe gpio-macsmc
 
+SMC laptop telemetry:
+  modprobe macsmc-input
+  modprobe macsmc-power
+  modprobe macsmc-hwmon
+
   modprobe apple-dart
 
 Internal keyboard/trackpad:
+  # These must already be registered in the module-only diagnostic image;
+  # there is no udev to load them after DockChannel creates BUS_HOST devices.
+  modprobe hid-apple
+  modprobe hid-magicmouse
+  modprobe hid-multitouch
   modprobe apple-dockchannel
   modprobe apple-rtkit-helper
   modprobe dockchannel-hid
+  # Opening the J614s multi-touch device also requires the paired
+  # /lib/firmware/apple/tpmtfw-j614s.bin; the proprietary blob is not bundled.
 
 Internal PCIe fabric (ports 0/1 only):
   modprobe pcie-apple

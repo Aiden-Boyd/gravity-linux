@@ -36,6 +36,12 @@ safe)
 	disable CONFIG_MFD_MACSMC
 	disable CONFIG_APPLE_DOCKCHANNEL
 	disable CONFIG_HID_DOCKCHANNEL
+	disable CONFIG_HID_APPLE
+	disable CONFIG_HID_MAGICMOUSE
+	disable CONFIG_HID_MULTITOUCH
+	disable CONFIG_INPUT_MACSMC_INPUT
+	disable CONFIG_MACSMC_POWER
+	disable CONFIG_SENSORS_MACSMC_HWMON
 	disable CONFIG_BRCMFMAC
 	disable CONFIG_WLAN
 	disable CONFIG_BT
@@ -75,6 +81,14 @@ diagnostic|yolo)
 		module CONFIG_GPIO_MACSMC
 		module CONFIG_APPLE_DOCKCHANNEL
 		module CONFIG_HID_DOCKCHANNEL
+		# DockChannel exposes BUS_HOST HID devices. The internal keyboard is
+		# handled by hid-apple and the MTP trackpad by hid-magicmouse.
+		module CONFIG_HID_APPLE
+		module CONFIG_HID_MAGICMOUSE
+		module CONFIG_HID_MULTITOUCH
+		module CONFIG_INPUT_MACSMC_INPUT
+		module CONFIG_MACSMC_POWER
+		module CONFIG_SENSORS_MACSMC_HWMON
 		module CONFIG_PCIE_APPLE
 		module CONFIG_NVME_APPLE
 		module CONFIG_SPI_APPLE
@@ -109,6 +123,14 @@ diagnostic|yolo)
 		enable CONFIG_GPIO_MACSMC
 		enable CONFIG_APPLE_DOCKCHANNEL
 		enable CONFIG_HID_DOCKCHANNEL
+		# Exact J614s HID consumers: keyboard quirks plus the BUS_HOST MTP
+		# trackpad parser. Keep hid-multitouch too for generic report support.
+		enable CONFIG_HID_APPLE
+		enable CONFIG_HID_MAGICMOUSE
+		enable CONFIG_HID_MULTITOUCH
+		enable CONFIG_INPUT_MACSMC_INPUT
+		enable CONFIG_MACSMC_POWER
+		enable CONFIG_SENSORS_MACSMC_HWMON
 		enable CONFIG_PCIE_APPLE
 		enable CONFIG_NVME_APPLE
 		enable CONFIG_SPI_APPLE
