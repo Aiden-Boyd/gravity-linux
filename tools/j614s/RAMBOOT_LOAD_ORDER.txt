@@ -18,11 +18,18 @@ Then load in dependency order, checking dmesg after EVERY command:
   modprobe macsmc
   modprobe gpio-macsmc
 
+SMC user-facing devices:
+  modprobe macsmc-power
+  modprobe macsmc-hwmon
+  modprobe macsmc-input
+
   modprobe apple-dart
 
 Internal keyboard/trackpad:
   modprobe apple-dockchannel
   modprobe apple-rtkit-helper
+  modprobe hid-apple
+  modprobe hid-magicmouse
   modprobe dockchannel-hid
 
 Internal PCIe fabric (ports 0/1 only):
@@ -52,6 +59,9 @@ Bluetooth:
 Shortcut:
   j614s-diag report
   j614s-diag smc
+  j614s-diag battery
+  j614s-diag sensors
+  j614s-diag lid
   j614s-diag input
   j614s-diag cpufreq
   j614s-diag pcie
