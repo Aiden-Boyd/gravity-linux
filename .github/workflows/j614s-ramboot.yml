@@ -47,14 +47,16 @@ jobs:
           grep -q 'LOGBUF_TOP_GUARD_SIZE' m1n1/src/kboot.c
           grep -q 'mcc,t6041' m1n1/src/mcc.c
           grep -q 't6040_features' m1n1/src/cpufreq.c
-          grep -q 'skipping T6040 initialization in guarded J614s first-boot stage1' m1n1/src/kboot.c
+          grep -q 't6040_pcie_requested' m1n1/src/kboot.c
+          grep -q 'T6040 disabled by target DT; leaving PCIe untouched' m1n1/src/kboot.c
+          grep -q 'APCIE_PHY_CTRL_RESET_T8132 BIT(4)' m1n1/src/pcie.c
           git -C m1n1 diff --check
           git -C m1n1 diff > m1n1-j614s-v1.9.9.diff
 
       - name: Build stage1 twice reproducibly
         env:
           RUSTUP_TOOLCHAIN: 1.98.1
-          M1N1_VERSION_TAG: v1.9.9-j614s.2
+          M1N1_VERSION_TAG: v1.9.9-j614s.3
         run: |
           make -C m1n1 ARCH=aarch64-linux-gnu- RELEASE=1 CHAINLOADING=1 -j2
           cp m1n1/build/m1n1.bin /tmp/m1n1-first.bin
@@ -66,12 +68,12 @@ jobs:
           SHA="$(sha256sum m1n1/build/m1n1.bin | awk '{print $1}')"
           printf 'candidate-size=%s\ncandidate-sha256=%s\n' "$SIZE" "$SHA"
           printf '%s  %s\n' "$SHA" "m1n1.bin" | tee m1n1-j614s-v1.9.9.sha256
-          strings m1n1/build/m1n1.bin | grep -Fq 'chosen.asahi,m1n1-stage1-version=v1.9.9-j614s.2'
+          strings m1n1/build/m1n1.bin | grep -Fq 'chosen.asahi,m1n1-stage1-version=v1.9.9-j614s.3'
 
       - name: Upload patched stage1 candidate
         uses: actions/upload-artifact@v4
         with:
-          name: m1n1-stage1-v1.9.9-j614s.2-candidate
+          name: m1n1-stage1-v1.9.9-j614s.3-candidate
           path: |
             m1n1/build/m1n1.bin
             m1n1-j614s-v1.9.9.sha256
@@ -106,9 +108,9 @@ jobs:
           python3 -m py_compile tools/j614s/installer/*.py
           python3 -m py_compile tools/j614s/m1n1/collect-gpu-adt.py
 
-          # Pin the read-only T6040/G16 evidence packet. These are ADT facts,
-          # not permission to create or probe a native GPU DT node.
-          python3 -c 'import json; d=json.load(open("tools/j614s/t6040-gpu-evidence.json")); assert d["machine"] == {"model":"Mac16,8","board":"J614s","soc":"T6040","gpu_generation":"G16"}; assert d["safety"]["do_not_probe"] is True; assert d["adt"]["sgx"]["compatible"] == "gpu,t6040"; assert d["adt"]["sgx"]["interrupts_raw_adt"] == [1481,1482,1483,1484,1505,1507,1496,1498]; assert d["adt"]["gfx_asc"]["interrupts_raw_adt"] == [1502,1501,1504,1503]; assert d["adt"]["gfx_asc"]["linux_mailbox_semantic_candidate"]["interrupts"] == [1501,1502,1503,1504]'
+          # T6040/G16 inventory is pinned as evidence only. It must never
+          # become an accidental live GPU probe through this RAM-boot path.
+          python3 -c 'import json; d=json.load(open("tools/j614s/t6040-gpu-evidence.json")); assert d["machine"]["soc"] == "T6040"; assert d["machine"]["gpu_generation"] == "G16"; assert d["safety"]["do_not_probe"] is True; delta=int(d["adt"]["address_translation"]["cpu_physical_delta"],0); assert all(int(r["adt_bus_base"],0)+delta==int(r["cpu_physical_base"],0) for b in ("sgx","gfx_asc") for r in d["adt"][b]["registers"])'
           grep -q 'ps_gpx: power-controller@0' arch/arm64/boot/dts/apple/t6040-pmgr.dtsi
           grep -q 'ps_afr: power-controller@100' arch/arm64/boot/dts/apple/t6040-pmgr.dtsi
           grep -q 'ps_gfx: power-controller@110' arch/arm64/boot/dts/apple/t6040-pmgr.dtsi
@@ -135,10 +137,10 @@ jobs:
           grep -q 'pwren-gpios = <&smc_gpio 0x13 GPIO_ACTIVE_HIGH>' arch/arm64/boot/dts/apple/t6040-j614s-all.dts
           grep -q 'pwren-gpios = <&smc_gpio 0x19 GPIO_ACTIVE_HIGH>' arch/arm64/boot/dts/apple/t6040-j614s-all.dts
 
-          # Candidate .2 is being rebuilt and repinned. Until its immutable
-          # hash is committed, normal install mode must fail closed.
+          # A new stage1 candidate is being rebuilt and repinned. Until its
+          # immutable hash is committed, normal install mode must fail closed.
           grep -q "^STAGE1_REPIN_PENDING=1$" tools/j614s/installer/bootstrap.sh
-          grep -q "stage1 v1.9.9-j614s.2 repin is pending" tools/j614s/installer/bootstrap.sh
+          grep -q "repin is pending" tools/j614s/installer/bootstrap.sh
           ! grep -q "m1n1-stage2-v1.9.9" tools/j614s/installer/bootstrap.sh
 
       - name: Install build dependencies
@@ -185,8 +187,8 @@ jobs:
           sh tools/j614s/ramboot-config.sh "$PROFILE"
           make ARCH=arm64 LLVM=1 olddefconfig
 
-          # Native T6040 GPU acceleration is not a reviewed bring-up target yet.
-          # Keep simpledrm available while preventing accidental AGX probing.
+          # simpledrm is fine; native G16 probing remains gated until Linux,
+          # m1n1, firmware ABI and Mesa all explicitly support T6040.
           sh tools/j614s/gpu-audit.sh
 
           grep -qx 'CONFIG_ARM64_16K_PAGES=y' .config
