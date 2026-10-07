@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "purpose": "non-live T6040 storage-node design skeleton",
+  "compile_into_normal_dtb": false,
+  "enable_by_default": false,
+  "mailbox": {
+    "compatible": ["apple,t8140-asc-mailbox", "apple,asc-mailbox-v4"],
+    "reg": {"base":"0x409608000","size":"0x4000"},
+    "interrupts": [1530,1531,1532,1533],
+    "interrupt_names": ["send-empty","send-not-empty","recv-empty","recv-not-empty"],
+    "power_domain": "ps_ans"
+  },
+  "sart": {
+    "compatible_candidate": "apple,t8140-sart",
+    "reg": [
+      {"name":"sart","base":"0x40dc50000","size":"0xc000"},
+      {"name":"power","base":"0x40dcc13e8","size":"0x4"}
+    ],
+    "power_domain": "ps_ans",
+    "note": "Uses the separately gated CoastGuard variant ported on this branch."
+  },
+  "nvme": {
+    "compatible_candidate": ["apple,t6040-nvme-ans2","apple,t8132-nvme-ans2"],
+    "resources_from_evidence": [
+      {"role":"controller-reg9","base":"0x44dcc0000","size":"0x10000"},
+      {"role":"ans-asc","base":"0x409600000","size":"0x4000"},
+      {"role":"nvmmu-reg3","base":"0x40dcc0000","size":"0x60000"}
+    ],
+    "interrupt": 2583,
+    "power_domains": ["ps_ans","ps_apcie_sys_st0","ps_apcie_sys_st1"],
+    "reset": "ps_ans",
+    "blocked_reason": "Gravity's current driver does not yet expose an explicit T6040 three-resource or equivalent reg3/reg9 contract."
+  }
+}
