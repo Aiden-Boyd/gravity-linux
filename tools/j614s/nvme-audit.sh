@@ -22,6 +22,14 @@ grep -q 'needs_ioq_register' drivers/nvme/host/apple.c ||
     fail "missing M4 IOQ setup gate"
 grep -q 'apple,t8132-nvme-ans2' drivers/nvme/host/apple.c ||
     fail "missing T8132 ANS2 compatible"
+grep -q 'void __iomem \*mmio_nvmmu;' drivers/nvme/host/apple.c ||
+    fail "missing optional split NVMMU aperture support"
+
+if grep -q 'apple,t6040-nvme-ans2' drivers/nvme/host/apple.c; then
+    if ! grep -Eq 'apple,firmware-abi|firmware_managed_queues' drivers/nvme/host/apple.c; then
+        fail "T6040 compatible exists without an explicit firmware queue ABI gate"
+    fi
+fi
 
 grep -q 'apple,t8140-sart' drivers/soc/apple/sart.c ||
     fail "missing T8140 CoastGuard SART support"
