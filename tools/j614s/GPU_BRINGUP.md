@@ -81,9 +81,11 @@ calibration/UAT ABI before Linux probing is allowed.
 ## Read-only ADT verification
 
 `tools/j614s/m1n1/collect-gpu-adt.py` can independently re-collect the GPU
-inventory from a captured ADT or from a tethered m1n1 proxy. It deliberately
-does not import `m1n1.setup`, power the GPU, access GPU/ASC MMIO, or start
-firmware.
+inventory from a captured ADT or from a tethered m1n1 proxy. It deliberately does not import `m1n1.setup`, power the GPU, access GPU/ASC
+MMIO, or start firmware. Offline mode is ordinary file parsing. Live mode uses
+m1n1 proxy helpers and can allocate transient proxy scratch/heap memory, so
+"read-only" here specifically means **GPU- and persistent-state read-only**,
+not literally zero mutation inside m1n1's temporary proxy workspace.
 
 Offline:
 
@@ -102,6 +104,51 @@ python3 tools/j614s/m1n1/collect-gpu-adt.py \
   --live \
   -o j614s-t6040-gpu-adt.json
 ```
+
+
+## Current upstream admission checkpoint — 2026-10-07
+
+The exact checkpoint is pinned in
+`tools/j614s/gpu-upstream-status-2026-10-07.json`:
+
+- Asahi docs `0d1f8917fa88745d62a4c05d802c4a7298c8616b`: T604x GPU is
+  still **TBA**.
+- m1n1 `2460b604c6f016956ead711823605eea840c602e`: `dt_set_gpu()`
+  still has no T6040 case, and its GPU generation enum ends at G14.
+- Asahi Linux `bits/210-gpu`
+  `97b22d1355086a88447a048fc78212769ca5f41c`: `DRM_ASAHI` still
+  depends on `BROKEN`, its OF table ends at T6022, and there is no explicit
+  T6040/G16 configuration.
+
+That means the admission gate remains closed. This is not a judgment based on
+age or package versions; it is based on the actual current source contracts.
+
+## Candidate admission tooling
+
+When a real G16 branch appears, run
+`tools/j614s/gpu_candidate_gate.py` against the **exact** m1n1, Linux and Mesa
+checkouts plus a completed copy of
+`tools/j614s/gpu-candidate-contract.example.json`:
+
+```sh
+python3 tools/j614s/gpu_candidate_gate.py \
+  --m1n1 /path/to/m1n1 \
+  --linux /path/to/linux \
+  --mesa /path/to/mesa \
+  --contract /path/to/g16-candidate.json
+```
+
+The gate intentionally fails closed unless it finds all of these:
+
+1. an explicit T6040 case in m1n1's GPU handoff path **and** an explicit G16
+   GPU generation/configuration;
+2. an explicit `apple,agx-t6040` DRM compatible and G16/AGX2 Linux path that
+   is not merely mapped to T602x/G14;
+3. an explicit G16/AGX2 Mesa path; and
+4. a candidate-specific immutable-source/test/recovery contract.
+
+A PASS means **ready for human review**, not safe to boot. The staged G0-G3
+hardware test remains a separate decision.
 
 ## Bring-up order once T6040 GPU work exists
 
