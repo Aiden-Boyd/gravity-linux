@@ -75,6 +75,13 @@ jobs:
           test "$(git -C candidate rev-parse HEAD)" = "${{ matrix.sha }}"
           test -z "$(git -C candidate status --porcelain)"
 
+      - name: Install source-qualification toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            bc bison clang device-tree-compiler flex libelf-dev libssl-dev \
+            lld llvm make
+
       - name: Qualify source before any build
         run: |
           python3 matrix/tools/j614s/source_qualify.py             --manifest matrix/tools/j614s/bringup-images.json             --profile "${{ matrix.profile }}"             --source candidate | tee qualification.txt
