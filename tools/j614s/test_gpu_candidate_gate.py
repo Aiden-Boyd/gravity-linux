@@ -71,6 +71,21 @@ class CandidateGateTests(unittest.TestCase):
                 "firmware_abi_or_build": "REPLACE_WITH_ABI",
                 "first_test_scope": "G0",
                 "crash_recovery": "REPLACE_WITH_RECOVERY",
+                "m1n1_commit": "1" * 40,
+                "linux_commit": "2" * 40,
+                "mesa_commit": "3" * 40,
+            }))
+            result = gate.check_contract(path)
+            self.assertFalse(result[0].passed)
+
+    def test_short_nonimmutable_commit_ids_are_rejected(self):
+        with tempfile.TemporaryDirectory() as td:
+            path = pathlib.Path(td) / "contract.json"
+            path.write_text(json.dumps({
+                "dt_compatible": "apple,agx-t6040",
+                "firmware_abi_or_build": "26.x-G16-maintainer-contract",
+                "first_test_scope": "G0 probe-only",
+                "crash_recovery": "serial watchdog then sanctioned reboot",
                 "m1n1_commit": "abc",
                 "linux_commit": "def",
                 "mesa_commit": "ghi",
