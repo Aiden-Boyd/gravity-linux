@@ -1,0 +1,21 @@
+name: J614s USB Handoff Capture
+
+on:
+  push:
+    branches:
+      - j614s-one-shot-diagnostics
+    paths:
+      - 'tools/j614s/installer/usb_handoff_capture.py'
+      - 'tools/j614s/installer/test_usb_handoff_capture.py'
+      - '.github/workflows/j614s-usb-handoff-capture.yml'
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Python syntax
+        run: python3 -m py_compile tools/j614s/installer/usb_handoff_capture.py tools/j614s/installer/test_usb_handoff_capture.py
+      - name: Run USB evidence classification tests
+        run: python3 -m unittest discover -s tools/j614s/installer -p test_usb_handoff_capture.py -v
