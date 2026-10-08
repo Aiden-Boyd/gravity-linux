@@ -54,6 +54,21 @@ def branch_target(offset, word):
         imm -= 1 << 26
     return offset + (imm << 2)
 
+def evaluate_alignment(allocation, source_base, target_base):
+    """Simulate the 981 path with three independently observed runtime values."""
+    if any(not isinstance(v, int) or v < 0 or v >= (1 << 64)
+           for v in (allocation, source_base, target_base)):
+        raise ValueError("expected three unsigned 64-bit addresses")
+    translated = (allocation - source_base + target_base) & ((1 << 64) - 1)
+    return {
+        "translated": hex(translated),
+        "remainder": translated & 0xFFF,
+        "would_panic_in_candidate_path": bool(translated & 0xFFF),
+        "base_delta_mod_4096": (target_base - source_base) & 0xFFF,
+        "warning": "Only meaningful if runtime values came from this boot attempt",
+    }
+
+
 def analyze(data):
     if len(data) != KNOWN_SIZE or hashlib.sha256(data).hexdigest() != KNOWN_SHA256:
         raise ValueError("Unknown iBoot build; refusing version-specific panic inference")
@@ -100,8 +115,16 @@ def main():
     ap=argparse.ArgumentParser(description=__doc__)
     ap.add_argument("iboot",type=Path)
     ap.add_argument("--output",type=Path,default=Path("j614s-alignment-trace.json"))
+    ap.add_argument("--allocation",type=lambda x:int(x,0))
+    ap.add_argument("--source-base",type=lambda x:int(x,0))
+    ap.add_argument("--target-base",type=lambda x:int(x,0))
     a=ap.parse_args()
     result=analyze(a.iboot.read_bytes())
+    values=(a.allocation,a.source_base,a.target_base)
+    if any(x is not None for x in values) and not all(x is not None for x in values):
+        ap.error("runtime calculation needs all three address inputs")
+    if all(x is not None for x in values):
+        result["operator_supplied_runtime_values"]=evaluate_alignment(*values)
     a.output.write_text(json.dumps(result,indent=2)+"\n")
     print("Verified callers:",sum(x["matches"] for x in result["expected_callers"]),
           "/",len(result["expected_callers"]))
