@@ -124,6 +124,8 @@ Second family (`0x39390`, `0x393EC`):
 
 All descriptor addresses are **beyond the decompressed image end `0x393BA0`** (i.e. runtime BSS/data, not present as initialized bytes in the uploaded payload). Hence exact mapping values depend on boot-time inputs and cannot be read from the static file.
 
+Allocator **initialization** in the first-family loader is now found: **`0x36BC4–0x36BE0`**. The routine sets x10 = **`0x395C38`**, then performs `stp x8, x9, [x10]` at **`0x36BDC`**, writing the initial cursor (x8, loaded from `[x29-0xC8]`) and available-length value (x9, calculated as x27 minus a stack-frame value) into global fields `0x395C38/0x395C40`. The inputs are assembled from earlier boot-time range records rather than immutable bytes. This identifies the initializer, **not the actual failing cursor value**.
+
 Allocator `0x3B660`: reads a runtime cursor from **`0x395C38`**, invokes `0x39AC0` to round a requested size **up to 16 KiB**, then increments `0x395C38` and decrements the available byte count at **`0x395C40`** by that rounded size. It returns the **previous cursor**. The 16 KiB increment preserves the cursor's lower 12 bits: it does *not* independently establish that the initial cursor was 4 KiB-aligned.
 
 The actual check therefore reduces to:
