@@ -60,14 +60,14 @@ jobs:
           base = Path(os.environ["RUNNER_TEMP"]) / "padding-model/run-a"
           model = (base / "NOT_BOOTABLE-padding-model.bin").read_bytes()
           report = json.loads((base / "report.json").read_text())
-          boot_bin = source + b"\\x00" * 4
+          boot_bin = source + b"\x00" * 4
 
           assert len(source) == 0x3B0000
           assert len(boot_bin) == 0x3B0004
           assert len(model) == 0x3B4000
           assert model[:len(source)] == source
-          assert model[len(source):len(source) + 4] == b"\\x00" * 4
-          assert model[len(source) + 4:] == b"\\x00" * 0x3FFC
+          assert model[len(source):len(source) + 4] == b"\x00" * 4
+          assert model[len(source) + 4:] == b"\x00" * 0x3FFC
           assert len(model) % 0x4000 == 0
           assert hashlib.sha256(boot_bin).hexdigest() == (
               "32cb8425aab65952c5421034f422444c28c0cafd476497846174edc658ff38be"
