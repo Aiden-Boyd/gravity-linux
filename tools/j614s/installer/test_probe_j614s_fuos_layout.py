@@ -27,6 +27,22 @@ class TestFuOS(unittest.TestCase):
                  "kcbz": 0x110, "kcxz": 0x20, "kcrz": 0x4, "kcsz": 0x2}
         self.assertEqual(mode1_cursor_residue(props), 0x136)
 
+    def test_stock_kernelcache_nine_byte_positive_integer(self):
+        # Apple kernel VAs have the high bit set, so DER adds a sign guard 0x00.
+        attrs = (
+            ("kclo", 0xFFFFFE0007004000),
+            ("kclz", 0x15B8000),
+            ("kcwz", 0x788000),
+            ("kcbz", 0x8000),
+            ("kcxz", 0x349C000),
+            ("kcrz", 0x1670000),
+            ("kcsz", 0x54000),
+        )
+        raw = b"".join(prop(*item) for item in attrs)
+        props = extract_properties(raw)
+        self.assertEqual(props["kclo"], 0xFFFFFE0007004000)
+        self.assertEqual(mode1_cursor_residue(props), 0)
+
     def test_conflicting_property_rejected(self):
         with self.assertRaises(ValueError):
             extract_properties(prop("kcwz", 4) + prop("kcwz", 8))
