@@ -6,6 +6,10 @@ on:
       - j614s-one-shot-diagnostics
     paths:
       - '.github/workflows/j614s-stage1-ab.yml'
+  pull_request:
+    paths:
+      - '.github/workflows/j614s-stage1-ab.yml'
+      - 'tools/j614s/m1n1/patch-v1.9.9-j614s.py'
   workflow_dispatch:
 
 permissions:
