@@ -79,7 +79,7 @@ def analyze(data):
         validated.append({"offset": hex(off), "opcode": hex(got), "meaning": meaning})
     labels = {}
     for off, name in LABELS.items():
-        if data[off:off+len(name)+1] != name.encode() + b"\\0":
+        if data[off:off+len(name)+1] != name.encode() + b"\0":
             raise ValueError(f"Caller label {name!r} not present at {off:#x}")
         labels[hex(off)] = name
     if (struct.unpack_from("<I",data,0x3B7AC)[0] >> 5 & 0x7ffff) * 4 + 0x3B7AC != 0x3B838:
