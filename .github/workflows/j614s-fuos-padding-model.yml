@@ -1,0 +1,96 @@
+name: J614s fuOS Padding Model (No Install)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - j614s-fuos-padding-model-ci
+    paths:
+      - .github/workflows/j614s-fuos-padding-model.yml
+      - tools/j614s/installer/build_fuos_padding_model.py
+      - tools/j614s/installer/test_build_fuos_padding_model.py
+
+permissions:
+  contents: read
+
+jobs:
+  padding-model:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Checkout experiment only (no push credentials)
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Run isolated synthetic unit tests
+        run: |
+          set -euo pipefail
+          python3 tools/j614s/installer/test_build_fuos_padding_model.py -v
+
+      - name: Build two identical raw padding models in ephemeral runner paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          SOURCE="tools/j614s/m1n1/m1n1-v1.9.9-j614s.4-chainloading.bin"
+          test "$(wc -c < "$SOURCE" | tr -d '[:space:]')" = "3866624"
+          test "$(sha256sum "$SOURCE" | cut -d' ' -f1)" = "29c9ac4542577e88e58734075d069835afac1a6b4db8b16b7aa7000942196411"
+
+          mkdir -p "$RUNNER_TEMP/padding-model/run-a" "$RUNNER_TEMP/padding-model/run-b"
+          python3 tools/j614s/installer/build_fuos_padding_model.py \
+            --source "$SOURCE" \
+            --output "$RUNNER_TEMP/padding-model/run-a/NOT_BOOTABLE-padding-model.bin" \
+            --report "$RUNNER_TEMP/padding-model/run-a/report.json"
+          python3 tools/j614s/installer/build_fuos_padding_model.py \
+            --source "$SOURCE" \
+            --output "$RUNNER_TEMP/padding-model/run-b/NOT_BOOTABLE-padding-model.bin" \
+            --report "$RUNNER_TEMP/padding-model/run-b/report.json"
+
+          cmp "$RUNNER_TEMP/padding-model/run-a/NOT_BOOTABLE-padding-model.bin" \
+              "$RUNNER_TEMP/padding-model/run-b/NOT_BOOTABLE-padding-model.bin"
+          cmp "$RUNNER_TEMP/padding-model/run-a/report.json" \
+              "$RUNNER_TEMP/padding-model/run-b/report.json"
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib
+          import json
+          import os
+
+          source = Path("tools/j614s/m1n1/m1n1-v1.9.9-j614s.4-chainloading.bin").read_bytes()
+          base = Path(os.environ["RUNNER_TEMP"]) / "padding-model/run-a"
+          model = (base / "NOT_BOOTABLE-padding-model.bin").read_bytes()
+          report = json.loads((base / "report.json").read_text())
+          boot_bin = source + b"\x00" * 4
+
+          assert len(source) == 0x3B0000
+          assert len(boot_bin) == 0x3B0004
+          assert len(model) == 0x3B4000
+          assert model[:len(source)] == source
+          assert model[len(source):len(source) + 4] == b"\x00" * 4
+          assert model[len(source) + 4:] == b"\x00" * 0x3FFC
+          assert len(model) % 0x4000 == 0
+          assert hashlib.sha256(boot_bin).hexdigest() == (
+              "32cb8425aab65952c5421034f422444c28c0cafd476497846174edc658ff38be"
+          )
+          assert report["extra_post_terminator_padding"] == 0x3FFC
+          assert report["model_length"] == 0x3B4000
+          assert report["current_conditional_mode1_low12"] == 4
+          assert report["model_conditional_mode1_low12"] == 0
+          assert report["model_sha256"] == hashlib.sha256(model).hexdigest()
+          print("PASS: two deterministic model builds; source, terminator, hash, size, and page alignment")
+          print("NOTE: no Image4 generated; no boot acceptance or runtime alignment proven")
+          PY
+
+      - name: Ensure repo files remain unchanged
+        run: |
+          set -euo pipefail
+          git diff --exit-code
+          git diff --cached --exit-code
+
+      - name: Upload report ONLY (no candidate binary)
+        uses: actions/upload-artifact@v4
+        with:
+          name: j614s-fuos-padding-model-report-only
+          path: ${{ runner.temp }}/padding-model/run-a/report.json
+          if-no-files-found: error
+          retention-days: 14
