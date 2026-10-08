@@ -241,6 +241,33 @@ A synthetic test setting `kcwz=0x3B0000` (metadata-only calculation, **not a pro
 
 **Best next evidence:** (1) identify whether `fuos` reaches the mode-1 parser in the actual failed boot; (2) derive or observe `descriptor.destination - descriptor.source` low 12 bits; (3) obtain the boot image from a **normal, successful** macOS boot and compare `kcwz` alignment as a control. Keep PR #9's RVBAR guard separate.
 
+## Same-generation Apple original `krnl` versus active Gravity `fuos` (October 7 control upload)
+
+Analyzed user-uploaded `gravity-original-kernelcache.img4` from **the same active Gravity Preboot boot generation** as `kernelcache.custom...`, using exactly the same Image4 PAYP property reader (updated to accept 9-byte positive DER INTEGERs, needed for Apple's high-bit-set kernel virtual addresses). **This is the 15.1 stub's original kernelcache, not a captured successful 26.6.2 macOS boot.** The different `krnl` and `fuos` image formats do not guarantee identical load behavior.
+
+| Property | Original Apple `krnl` | Active Gravity `fuos` |
+|---|---:|---:|
+| Image4 file length | `0x1B83FE3` (28,852,195 B) | `0x3B0B68` (3,869,544 B) |
+| Payload type | `krnl` (compressed `bvx2`) | `fuos` (raw ARM64) |
+| `kcep` | `0xFFFFFE000BB64000` | `0x800` |
+| `kclf` | `0x52F0000` | `0x3B0004` |
+| `kclo` | `0xFFFFFE0007004000` | 0 |
+| `kclz` | `0x15B8000` | 0 |
+| `kcrz` | `0x1670000` | 0 |
+| `kcwz` | `0x788000` | `0x3B0004` |
+| `kcbz` | `0x8000` | absent (modeled 0) |
+| `kcxz` | `0x349C000` | absent (modeled 0) |
+| `kcsz` | `0x54000` | absent (modeled 0) |
+| `(kclo+kclz+kcwz+kcbz+kcxz+kcrz+kcsz) & 0xFFF` | **`0x000`** | **`0x004`** |
+
+SHA-256 original `krnl`: `d174b86394f74301280f559484ce52de78908f2dbbd074faff8ec1a236cc1d4b`; custom `fuos`: `2d513ff4d92539fc83957f3b3304f26dd44442e1d37bae3030634f7701fa53a1`.
+
+**Interpretation:** Every contribution to the reconstructed first-family/mode-1 starting cursor is page-aligned in Apple's `krnl`. The `fuos` record contributes **four low bits through `kcwz`**. This confirms the **metadata size residue** and supports a testable hypothesis that the 4-byte appended terminator affects this allocator path. It does **not** confirm the actual Oct 7 iBoot panic was caused by the fuOS length. The assertion at `0x3B7A8` checks the translated address **`cursor - mapping_source + mapping_destination`**, not cursor alone; the runtime delta and path taken are still unknown. The `krnl` and `fuos` executable/entry-point formats differ, so the kernel's 4 KiB-aligned sizes cannot be taken as a universal image-format rule.
+
+The original `krnl` includes compression and multiple BootKC segments; a valid counterfactual fuOS image must be built through the supported `kmutil` process and may have required semantics beyond padded byte length. **Do not edit Image4, remove m1n1 termination bytes, install a padded image, or retry boot based only on these static findings.**
+
+**Next defensible work:** a **CI-only hypothetical padded `fuos` model** preserving the required 4-byte terminator and adding post-payload zero padding to 16 KiB, with hashes, exact expected length, and source-provenance checks; plus tracing the runtime mapping delta or obtaining a comparable known-good fuOS on M4. It must not repin the live installer, publish a bootable image, or modify macOS security/default boot. Only a separately approved controlled hardware test could show whether the 4-byte residue causes the iBoot panic.
+
 ## Next engineering steps
 
 1. **Complete:** verified the active Image4 payload, entry point, length fields, exact original source bytes, and 4-byte terminator; see above. Do not assume this is the root cause.
