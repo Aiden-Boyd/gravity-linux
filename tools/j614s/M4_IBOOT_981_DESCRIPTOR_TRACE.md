@@ -2,6 +2,20 @@
 
 **Scope:** static, offline, read-only analysis of the *user-provided* decompressed iBoot from the J614s/Apple T6040 Gravity installation. **Not a verified hardware fix.** The proprietary binary and device identifiers are **not committed to this repository**.
 
+## Update: exact panic source identifier resolves the 981 collision
+
+A fresh scan found **three** `mov w1,#981` instructions in this exact iBoot image. Their immediately preceding `bl` calls invoke small literal-loading functions, which return distinct 64-bit source identifiers in `x0`. All three sites then branch to the same panic reporter at `0x82250`.
+
+| Line-981 site | Literal returned in `x0` | Equals recorded `3bdace14b1a9a68`? |
+| --- | --- | --- |
+| `0x3B83C` | `03bdace14b1a9a68` | **Yes** |
+| `0x10C7B4` | `006b5f3c9b59dd40` | No |
+| `0x15596C` | `099180f7bfe1a22b` | No |
+
+Therefore the *full* firmware panic identifier **`3bdace14b1a9a68:981`**, as opposed to its line suffix, **identifies the translated-address alignment panic at `0x3B83C`** in this image. The remaining unknown is the *runtime memory descriptor and allocator state* that cause it to execute.
+
+The checked-in Python script `tools/j614s/installer/audit_iboot_981_sites.py` rederives these source identifiers from the four MOVZ/MOVK literals and direct RET in each helper. It requires an exact SHA-256 match for the iBoot 15.1 binary. Its synthetic tests do not include firmware bytes.
+
 ## Reproducible input
 
 - iBoot build: `RELEASE:iBoot-11881.41.5` (iBoot UUID `88DDD37F-DE0C-3B50-859C-5590A16B3384` as reported by SOCD).
@@ -62,4 +76,4 @@ The first command verifies exact known image SHA, linked base, **17 opcode finge
 3. **Next evidence needed:** capture firmware-time `allocator_return`, descriptor `+8/+16` for the exact failing call; alternatively locate a known-good, same-firmware boot-flow reference showing these operands. Generic USB monitoring after m1n1 would initialize cannot reveal this.
 4. **Recovery:** keep normal macOS as default and the known-good original `boot-original.bin` backup intact until a controlled and reviewed test is justified.
 
-**Boundary:** The static candidate corresponds to line 981, but the firmware's exact source-file identity and **which call site executed** are not independently established from the panic report. Any claim that this is definitely the fuOS handoff root cause would be premature.
+**Boundary:** Source hash **plus** line 981 now identifies the iBoot translation/alignment assertion specifically. The runtime cause (allocator cursor, source/target mapping bases, input region, or OS-paired firmware interaction) remains unproven. This does **not** establish a fuOS payload corruption, nor does it justify patching signed firmware.
