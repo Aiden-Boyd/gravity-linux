@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read-only estimate of the iBoot 11881 mode-1 cursor residue from fuOS PAYP.
+"""Read-only estimate of iBoot 11881 mode-1 cursor residues from Image4 PAYP.
 
 This prints a CONDITIONAL intermediate calculation only. It cannot establish
 that the actual failure used this path, or that the subsequent address
@@ -28,11 +28,11 @@ def extract_properties(image: bytes) -> dict[str, int]:
                 raise ValueError(f"invalid DER length for {tag}")
             length = int.from_bytes(tail[pos:pos + n], "big")
             pos += n
-        if not 1 <= length <= 8 or pos + length > len(tail):
+        if not 1 <= length <= 9 or pos + length > len(tail):
             raise ValueError(f"bad DER integer for {tag}")
         value = int.from_bytes(tail[pos:pos + length], "big", signed=True)
-        if value < 0:
-            raise ValueError(f"negative integer {tag}")
+        if value < 0 or value > (1 << 64) - 1:
+            raise ValueError(f"out-of-range unsigned 64-bit integer {tag}")
         if tag in found and found[tag] != value:
             raise ValueError(f"conflicting property {tag}")
         found[tag] = value
@@ -52,16 +52,20 @@ def main():
     ap.add_argument("image", type=Path)
     args = ap.parse_args()
     data = args.image.read_bytes()
-    if not all(marker in data[:48] for marker in (b"IMG4", b"IM4P", b"fuos")):
-        ap.error("input is not an apparent fuOS Image4")
+    if b"IMG4" not in data[:32] or b"IM4P" not in data[:48]:
+        ap.error("input is not an apparent Image4")
+    image_type = "fuos" if b"fuos" in data[:48] else ("krnl" if b"krnl" in data[:48] else "unknown")
+    if image_type == "unknown":
+        ap.error("input is neither fuOS nor krnl Image4")
     props = extract_properties(data)
     if not props:
         ap.error("no kcXX Image4 properties located")
-    print("Image4 PAYP integers (not live register values):")
+    print(f"Image type: {image_type} — PAYP integers (not live register values):")
     for k, v in sorted(props.items()):
         print(f"  {k}: 0x{v:x} ({v:,})")
     print(f"\nConditional iBoot 11881 mode-1 cursor residue: "
           f"0x{mode1_cursor_residue(props):03x}")
+    print("All contributions were extracted from the image, not runtime RAM.")
     print("The later mapping source/destination adjustment is UNKNOWN.")
     print("This output does NOT prove the cause of the iBoot panic.")
     print("Do NOT remove terminators, modify boot policy, or reboot on this basis.")
