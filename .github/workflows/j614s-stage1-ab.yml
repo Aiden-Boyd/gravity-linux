@@ -53,7 +53,7 @@ jobs:
         env:
           VARIANT: ${{ matrix.variant }}
           RUSTUP_TOOLCHAIN: 1.98.1
-          M1N1_VERSION_TAG: v1.9.9-j614s-handoff-test
+          M1N1_VERSION_TAG: v1.9.9-j614s.4
         run: |
           set -eu
           release=1
@@ -72,6 +72,12 @@ jobs:
           cp /tmp/patch-applied.diff candidate/source.patch
           sha256sum candidate/m1n1.bin > candidate/SHA256SUMS
           wc -c candidate/m1n1.bin | tee candidate/BYTES.txt
+          if [ "$VARIANT" = j614s-release ]; then
+            # Exact regression against stage1 installed on the physical target.
+            test "$(sha256sum candidate/m1n1.bin | cut -d' ' -f1)" = 29c9ac4542577e88e58734075d069835afac1a6b4db8b16b7aa7000942196411
+            test "$(wc -c < candidate/m1n1.bin | tr -d '[:space:]')" = 3866624
+            echo 'Pinned installed Gravity stage1 reproduced exactly' | tee candidate/PIN_VERIFICATION.txt
+          fi
           cat > candidate/README.txt <<'EOF'
           J614s diagnostic experiment: NOT VERIFIED ON TARGET.
           This artifact is a raw m1n1 stage1 candidate, not a signed IMG4.
