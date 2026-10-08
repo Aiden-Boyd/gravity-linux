@@ -1,0 +1,31 @@
+name: J614s one-shot diagnostics tests
+on:
+  push:
+    branches: [j614s-one-shot-diagnostics]
+    paths:
+      - 'tools/j614s/installer/one_shot_diagnostics.py'
+      - 'tools/j614s/installer/test_one_shot_diagnostics.py'
+      - '.github/workflows/j614s-one-shot-diagnostics.yml'
+  pull_request:
+    paths:
+      - 'tools/j614s/installer/one_shot_diagnostics.py'
+      - 'tools/j614s/installer/test_one_shot_diagnostics.py'
+      - '.github/workflows/j614s-one-shot-diagnostics.yml'
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run synthetic tests (no proprietary firmware)
+        run: python3 -m unittest discover -s tools/j614s/installer -p 'test_one_shot_diagnostics.py' -v
+      - name: CLI smoke test
+        run: |
+          python3 tools/j614s/installer/one_shot_diagnostics.py --out /tmp/j614s-diagnostics
+          test -s /tmp/j614s-diagnostics/report.json
+          test -s /tmp/j614s-diagnostics/report.md
