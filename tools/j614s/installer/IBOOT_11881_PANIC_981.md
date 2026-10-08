@@ -136,6 +136,53 @@ The actual check therefore reduces to:
 
 because every allocator size increment observed in this helper is a multiple of 16 KiB. **The relevant issue to investigate is the initial cursor and translation bases and how the two registration paths configure them.**
 
+### Initial allocator cursor reconstructed to a runtime layout-record formula (Oct 7 follow-up)
+
+**New result:** the first-family allocator initializer **is not opaque anymore**. Its low bits originate in a specific five-term expression built from the layout record being processed.
+
+The caller sets up the layout parser `0x3AC18` at `0x36B24–0x36BA0`:
+
+- At `0x36AD8–0x36ADC`, helper `0x3D304` rounds **both** x8 and x9 **up to 16 KiB**, then saves them in `[x29-0xF0]` / `[x29-0xE8]`.
+- `0x36B24` loads x2 from `[x29-0xF0]`: **x2 is therefore 16 KiB-aligned** at parser entry.
+- `0x36B8C` writes mode **1** to the parser's first stack argument; `0x36B98` sets x5=x28 (the runtime input layout-record pointer); `0x36BA0` calls `0x3AC18`.
+- `0x3AC40` saves x5 in x19 and `0x3AC78` loads mode 1, selecting the `0x3AFF0` branch. At `0x3AD3C`, the parser saves its original x2 at `[sp+0xB0]`. It receives an output pointer to caller temporary `[x29-0xC8]`, which it handles through multiple stack-pointer arguments (from `0x36B40–0x36B7C`).
+- At `0x3B0D4–0x3B0E4` the parser loads four 64-bit layout-record fields: `x8=[x19+0x18]`, `x9=[x19+0x88]`, `x10=[x19+0x98]`, `x11=[x19+0x08]`, with `x13=[sp+0xB0]` (the incoming x2).
+- At `0x3D294–0x3D2AC`, the parser's shared helper restores x12 from `[x29-0x68]`, containing the output pointer to the caller's `[x29-0xC8]` temporary. Back at `0x3B168–0x3B17C`, mode 1 computes and **stores** the cursor into this temporary:
+
+```asm
+0x3B168  ldr x11, [x19, #0x08]       ; R8
+0x3B16C  add x8,  x8,  x13           ; R18 + base
+0x3B170  add x9,  x9,  x10           ; R88 + R98
+0x3B174  add x8,  x8,  x9
+0x3B178  add x8,  x8,  x11           ; + R8
+0x3B17C  str x8, [x12]              ; caller's [x29-0xC8] output
+```
+
+- `0x36BD4` reads that output from `[x29-0xC8]` and `0x36BDC` writes it as allocator cursor at `0x395C38`.
+
+Consequently, for **this first-family, mode-1 initialization**:
+
+```text
+base      = round_up_16K(previously computed base)
+R         = runtime layout record at x28
+cursor_0  = base + R[0x08] + R[0x18] + R[0x88] + R[0x98]
+cursor_0 & 0xfff = (R[0x08]+R[0x18]+R[0x88]+R[0x98]) & 0xfff
+```
+
+This follows directly from the decoded instructions. **It does not establish the contents of R at crash time**; the input record lives in boot-time RAM. Other initializer paths must be analyzed separately.
+
+For the line-981 panic on this path, since allocator increments are in 16 KiB units:
+
+```text
+panic iff (sum(R offsets) - descriptor.source + descriptor.destination) & 0xfff != 0
+```
+
+The boot-time descriptor values are still unknown, so this does **not** prove `R` was itself malformed or that these four fields individually require alignment. The invariant is on the *combined translation*, not on each record member independently.
+
+**Second-family cross-check:** `0x37E48–0x37E78` passes a runtime base at `[sp+0x70]` through helper `0x3AA94` and stores its two results at `[sp+0x128]` / `[sp+0x130]`. `0x37F10–0x37F14` saves the original base as descriptor destination `[0x3960E0]`. At `0x38AC4–0x38B10` it sets descriptor source to `(R[0x08] & ~0x1ffffff) + [sp+0x128] - [sp+0x130]`. Its bottom 12 bits are therefore determined by **the difference between those two helper outputs**, since the 32 MiB mask removes low bits of the other term. Exact runtime helper outputs are not available from the uploaded firmware.
+
+**Practical next step:** acquire an aligned-versus-failing boot-memory-layout *observation* (or precise caller context) before changing m1n1, `fuOS`, or iBoot. The input record R and the descriptor source/destination values are the minimal unknowns to capture. Static analysis has identified the arithmetic, not the specific corrupted or incompatible memory value.
+
 ### What is known vs not known
 
 **Confirmed statically:** four call sites, two tail-branch stubs, names `SEPPatches`/`uStuff`, runtime descriptor addresses, source/destination calculation sites, 16 KiB-rounded bump allocator, fatal low-12-bit alignment assertion.
