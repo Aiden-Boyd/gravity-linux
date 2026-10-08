@@ -80,6 +80,68 @@ The function containing the line-981 panic also appears in iBoot's memory/kernel
 
 **Disposition:** no defective boot-image wrapper, wrong entry offset, missing source bytes, or mismatched file metadata has been demonstrated. The file-length anomaly is recorded as an investigative clue but **not** a validated root cause. No installed firmware or boot policy should be changed based on it.
 
+## Caller and memory-descriptor dataflow — static AArch64 audit
+
+This follow-up used the same **3,750,816-byte** decrypted/decompressed iBoot, wrapped **only in a temporary ELF for LLVM disassembly**. All addresses in this section are raw **file-relative instruction offsets (VMA 0)**; data/BSS symbol locations are likewise relative to the image base. They are *not physical addresses recovered from the panic log*.
+
+### How the crashing routine is called
+
+The 4 KiB assertion belongs to the function beginning **`0x3B72C`**. A scan for direct AArch64 `BL` calls to `0x3B72C` returns none because two branch-island forwarding stubs use `B`, not `BL`:
+
+- `0x3D548` prepares arguments, checks pointer-authentication state, then `B 0x3B72C` at **`0x3D564`**.
+- `0x3D57C` similarly forwards via **`B 0x3B72C`** at **`0x3D598`**.
+
+Four statically identifiable call sites pass through these stubs:
+
+| Caller `BL` | Forwarding entry | Named region |
+|---|---|---|
+| `0x372BC` | `0x3D57C` | `SEPPatches` |
+| `0x37314` | `0x3D57C` | `uStuff` |
+| `0x39390` | `0x3D548` | `SEPPatches` |
+| `0x393EC` | `0x3D548` | `uStuff` |
+
+The strings are embedded at **`0x2841F4`** (`SEPPatches\0`) and **`0x2841FF`** (`uStuff\0`), and their references can be verified at call-site setup `0x372A4/0x372FC` and `0x39378/0x393D4`.
+
+These are memory/boot-region names; the surrounding string table also contains `SEPFW`, `preoslog`, `BootArgs`, and kernel-header region names. Public SPTM reverse-engineering references independently describe `SEPPatches` and `uStuff` as registered boot memory regions, but **that alone does not establish that SPTM is executing at this precise point**. It is the **iBoot code** that calls the line-981 assertion.
+
+**Important constraint:** this proves that either named region *can reach* the crash, **not** which of the four calls actually ran during the observed failure. The SOCD report does not preserve that stack.
+
+### Map descriptors and their initialization
+
+The failing routine saves x5 as x28 (`0x3B758`), and calls the translation helper `0x3B61C` with x1 = x28 (`0x3B798`). The helper reads the mapping source and destination as **`[x1+8]`** and **`[x1+16]`**. Its result is checked at `0x3B7A8`.
+
+First family (`0x372BC`, `0x37314`):
+- `0x36458–0x3645C` sets x19 = **`0x395C48`**; the containing routine initializes a `0x488`-byte record here.
+- `0x36B08–0x36B10` stores x25 and x27 beginning at **`0x395C58`** (descriptor+16 and +24).
+- `0x371E4–0x371F0` translates using x19 as the mapping descriptor.
+- `0x372B0` and `0x37308` pass x7 = x19+`0x488` as the bounds/end of that descriptor region. The stub at `0x3D57C` supplies x5=x6=x19 for the alignment-checked routine.
+
+Second family (`0x39390`, `0x393EC`):
+- `0x37640–0x37644` sets x19 = **`0x3960D0`** and initializes a `0x488`-byte record there.
+- `0x37F08–0x37F14` sets x19 = `0x3960E0` (=descriptor+16) and stores **x20**, loaded from stack at `[sp+0x70]`, into `0x3960E0` (translation destination) and x27 into `0x3960E8`.
+- `0x38ACC–0x38B10` computes translation source from earlier range metadata: `x20 = ([input+8] & 0xfffffffffe000000) + [sp+0x128]`; then `x8 = x20 - [sp+0x130]`; store x8 into **`0x3960D8`** (descriptor+8). The `[input+8]` value itself is populated earlier at runtime.
+- `0x39248–0x3925C` sets x21 = `0x3960D0` for later allocations and translations. `0x39384/0x393E0` passes x7 = x21+`0x488`. The stub at `0x3D548` supplies x5=x6=x21.
+
+All descriptor addresses are **beyond the decompressed image end `0x393BA0`** (i.e. runtime BSS/data, not present as initialized bytes in the uploaded payload). Hence exact mapping values depend on boot-time inputs and cannot be read from the static file.
+
+Allocator `0x3B660`: reads a runtime cursor from **`0x395C38`**, invokes `0x39AC0` to round a requested size **up to 16 KiB**, then increments `0x395C38` and decrements the available byte count at **`0x395C40`** by that rounded size. It returns the **previous cursor**. The 16 KiB increment preserves the cursor's lower 12 bits: it does *not* independently establish that the initial cursor was 4 KiB-aligned.
+
+The actual check therefore reduces to:
+
+```text
+( initial allocator cursor - descriptor.source + descriptor.destination ) & 0xfff == 0
+```
+
+because every allocator size increment observed in this helper is a multiple of 16 KiB. **The relevant issue to investigate is the initial cursor and translation bases and how the two registration paths configure them.**
+
+### What is known vs not known
+
+**Confirmed statically:** four call sites, two tail-branch stubs, names `SEPPatches`/`uStuff`, runtime descriptor addresses, source/destination calculation sites, 16 KiB-rounded bump allocator, fatal low-12-bit alignment assertion.
+
+**Unproven:** actual runtime cursor and descriptors; which of the four calls ran on October 7; whether SPTM, a 15.1 stub/26.6.2 firmware combination, or a distinct memory-range input creates the mismatch; whether any revised m1n1 would be entered. **Do not install an RVBAR candidate or repack fuOS as a speculative fix.**
+
+The next read-only investigation should trace the initializer for **`0x395C38/0x395C40`** and the origin of the second path's **`[sp+0x70]`**, **`[sp+0x128]`**, and **`[sp+0x130]`** inputs. If the initial cursor is guaranteed page-aligned, then a mismatch between translation bases must explain the line-981 panic. If the runtime inputs remain unknown, request a *recoverable* debug trace instead of changing boot bytes blindly.
+
 ## Next engineering steps
 
 1. **Complete:** verified the active Image4 payload, entry point, length fields, exact original source bytes, and 4-byte terminator; see above. Do not assume this is the root cause.
