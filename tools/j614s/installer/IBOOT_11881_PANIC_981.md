@@ -191,6 +191,56 @@ The boot-time descriptor values are still unknown, so this does **not** prove `R
 
 The next read-only investigation should trace the initializer for **`0x395C38/0x395C40`** and the origin of the second path's **`[sp+0x70]`**, **`[sp+0x128]`**, and **`[sp+0x130]`** inputs. If the initial cursor is guaranteed page-aligned, then a mismatch between translation bases must explain the line-981 panic. If the runtime inputs remain unknown, request a *recoverable* debug trace instead of changing boot bytes blindly.
 
+## Image4 property-to-layout-record mapping: confirmed 4-byte residue (October 7, read-only)
+
+### Provenance and caveat
+
+Examined the **exact uploaded active Gravity fuOS** (`gravity-active-fuos.img4`, SHA-256 `2d513ff4d92539fc83957f3b3304f26dd44442e1d37bae3030634f7701fa53a1`) alongside the UUID-matched J614s iBoot 11881.41.5 executable. This is **static reverse engineering**, not a record of live CPU registers from the failed boot.
+
+**New direct link** between the *Image4 manifest* and the *runtime layout parser*: `0x3593C` parses 4-character `kcXX` property names and dispatches by little-endian inverted comparison through `0x3CFE0`, which ORs high halfword `0x6B63` (`kc`) onto a suffix. For example `kcwz` corresponds to `w9=0x777A` at `0x35A60`, comparison `0x3CFE0`, then store into `[x19+0x88]` at `0x35C18`.
+
+| Image4 property | Dispatch/store site | Runtime record field | Value in Gravity fuOS |
+|---|---|---|---|
+| `kclo` | `0x35A74` / `0x35A8C` | `R+0x08` | 0 |
+| `kclz` | `0x35A00` / `0x35B20` | `R+0x98` | 0 |
+| `kcwz` | `0x35A5C` / `0x35C18` | `R+0x88` | **`0x3B0004`** |
+| `kclf` | `0x359E4` / `0x35AF8` | `R+0x90` | `0x3B0004` |
+| `kcbz`, `kcxz`, `kcrz`, `kcsz` | `0x35AC4`, `0x35B00`, `0x35B84`, `0x35BCC`; accumulation `0x35BE8–0x35BF0` | `R+0x18` sum | 0: first two and fourth absent; `kcrz=0` |
+
+All eight present properties were confirmed directly as DER `IA5String`/INTEGER objects near the end of the uploaded Image4: `kcep=0x800`, `kclf=0x3B0004`, `kclo=0`, `kclz=0`, `kcrf=0`, `kcrz=0`, `kcwf=0`, `kcwz=0x3B0004`.
+
+The first-family caller `0x36100` saves **x2 as x28**; its dispatcher `0x1210` passes the caller's parsed layout record as x2 through `0x12C8`. At `0x36B98` it passes that record as x5 to `0x3AC18`, with mode=1 at `0x36B8C`. Consequently the computation already reconstructed at `0x3B168–0x3B17C` can be **evaluated for the specific Gravity `fuos` record**, provided that record is the runtime input to this path:
+
+```text
+cursor0 = align_up_16K(base) + R[kclo] + R[kclz] + R[kcwz]
+          + (R[kcbz] + R[kcxz] + R[kcrz] + R[kcsz])
+
+cursor0 (mod 4096) = (0 + 0 + 0x3B0004 + 0) & 0xFFF = **0x004**
+```
+
+**Why the extra four bytes now matter:** the original pinned m1n1 is **`0x3B0000`** bytes, which is 16 KiB-aligned. The installer appends the standard four NUL terminator bytes, causing `boot.bin` and Image4 `kcwz` to be **`0x3B0004`**. If the remaining memory-translation delta preserves low page bits, iBoot's line-981 assertion would indeed be reachable. This contradicts the previous weaker assumption that 16 KiB *allocation rounding alone* makes the four-byte suffix irrelevant: rounding allocation **increments** cannot fix a misaligned **initial cursor**.
+
+**However, no root cause is proven yet.** The line-981 check tests `cursor0 - descriptor.source + descriptor.destination`. We have **not** recovered the *runtime* descriptor source/destination or a stack trace showing which of four `SEPPatches`/`uStuff` callers ran during the actual panic. Their delta could cancel the `+4`. Also, Asahi's m1n1 packaging intentionally uses a 4-byte terminator; do **not** remove it, pad the payload, patch iBoot, install experimental images, or reboot on this inference alone.
+
+**Direct normal-macOS comparison is not yet possible** from the uploaded files: we have the Gravity custom Image4 and its 15.1 iBoot executable, but *no stock boot Image4 from the working 26.6.2 macOS installation*, which may use a different firmware code path. This must be recorded as missing evidence, not filled by assumptions.
+
+### Read-only reproducer
+
+The accompanying `probe_j614s_fuos_layout.py` parses the actual DER `kcXX` integer pairs from an Image4 copy and reports the **conditional mode-1 cursor low bits**. It does not touch the disk, `kmutil`, or policy. On the uploaded image:
+
+```text
+kcwz = 0x3b0004 (3,866,628)
+kclf = 0x3b0004 (3,866,628)
+kclo = 0
+kclz = 0
+kcrz = 0
+iBoot 11881 mode-1 cursor initial low 12 bits: 0x004
+```
+
+A synthetic test setting `kcwz=0x3B0000` (metadata-only calculation, **not a proposed image edit**) yields `0x000`. This supports the arithmetic, not an end-to-end boot result.
+
+**Best next evidence:** (1) identify whether `fuos` reaches the mode-1 parser in the actual failed boot; (2) derive or observe `descriptor.destination - descriptor.source` low 12 bits; (3) obtain the boot image from a **normal, successful** macOS boot and compare `kcwz` alignment as a control. Keep PR #9's RVBAR guard separate.
+
 ## Next engineering steps
 
 1. **Complete:** verified the active Image4 payload, entry point, length fields, exact original source bytes, and 4-byte terminator; see above. Do not assume this is the root cause.
