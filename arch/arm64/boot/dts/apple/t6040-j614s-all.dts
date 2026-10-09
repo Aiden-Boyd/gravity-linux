@@ -54,6 +54,10 @@
 &mtp_hid {
 	status = "okay";
 
+	/* STM supplies device IDs before DockChannel HID registers input. */
+	stm {
+	};
+
 	multi-touch {
 		firmware-name = "apple/tpmtfw-j614s.bin";
 	};
