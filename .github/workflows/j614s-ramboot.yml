@@ -6,6 +6,7 @@ on:
       - j614s-ramboot-test-v1
       - j614s-first-boot-v1
       - j614s-safe-screen-console
+      - j614s-smc-battery-smoke
   workflow_dispatch:
 
 permissions:
@@ -91,7 +92,6 @@ jobs:
         profile:
           - safe
           - diagnostic
-          - yolo
 
     env:
       PROFILE: ${{ matrix.profile }}
@@ -105,6 +105,8 @@ jobs:
         run: |
           sh -n tools/j614s/tethered-boot.sh
           sh -n tools/j614s/ramboot-diag.sh
+          sh -n tools/j614s/ramboot-config.sh
+          sh -n tools/j614s/ramboot-shell-init.sh
           sh -n tools/j614s/installer/bootstrap.sh
           python3 -m py_compile tools/j614s/installer/*.py
 
@@ -207,6 +209,9 @@ jobs:
               fi
               ;;
             diagnostic)
+              for symbol in FB FB_SIMPLE VT VT_CONSOLE FRAMEBUFFER_CONSOLE; do
+                grep -qx "CONFIG_${symbol}=y" .config
+              done
               grep -qx 'CONFIG_APPLE_DART=m' .config
               grep -qx 'CONFIG_PCIE_APPLE=m' .config
               grep -qx 'CONFIG_MFD_MACSMC=m' .config
@@ -260,11 +265,13 @@ jobs:
               apple/t6040-j614s-all.dtb
           fi
 
-          if [ "$PROFILE" = safe ]; then
-            # Firmware keeps the scanout running. SAFE has no power-domain
-            # provider, so do not defer simplefb waiting for one.
-            fdtput -d arch/arm64/boot/dts/apple/t6040-j614s.dtb \
-              /chosen/framebuffer@0 power-domains
+          if [ "$PROFILE" = safe ] || [ "$PROFILE" = diagnostic ]; then
+            # Firmware keeps scanout running; simplefb need not request a
+            # power transition before the staged power-domain tests.
+            for dtb in t6040-j614s t6040-j614s-all; do
+              fdtput -d "arch/arm64/boot/dts/apple/$dtb.dtb" \
+                /chosen/framebuffer@0 power-domains
+            done
           fi
 
           gzip -n -9 -c arch/arm64/boot/Image > Image.gz
@@ -341,17 +348,17 @@ jobs:
           if [ "$PROFILE" = safe ]; then
             cp arch/arm64/boot/dts/apple/t6040-j614s.dtb "$OUT/t6040-j614s.dtb"
             cat > "$OUT/BOOTARGS.txt" <<'EOF'
-          earlycon=apple,s5l-uart console=ttySAC0,1500000 console=tty0 keep_bootcon ignore_loglevel loglevel=8 rdinit=/init panic=0 idle=nop arm64.nowfxt nr_cpus=1 maxcpus=1
+          earlycon=apple,s5l-uart console=ttySAC0,1500000 console=tty0 keep_bootcon ignore_loglevel loglevel=8 rdinit=/init panic=0 idle=nop arm64.nowfxt nr_cpus=1 maxcpus=1 pd_ignore_unused clk_ignore_unused
           EOF
           elif [ "$PROFILE" = diagnostic ]; then
             cp arch/arm64/boot/dts/apple/t6040-j614s-all.dtb "$OUT/t6040-j614s.dtb"
             cat > "$OUT/BOOTARGS.txt" <<'EOF'
-          earlycon=apple,s5l-uart console=ttySAC0,1500000 keep_bootcon ignore_loglevel loglevel=8 rdinit=/init panic=0 idle=nop arm64.nowfxt nr_cpus=1 maxcpus=1
+          earlycon=apple,s5l-uart console=ttySAC0,1500000 console=tty0 keep_bootcon ignore_loglevel loglevel=8 rdinit=/init panic=0 idle=nop arm64.nowfxt nr_cpus=1 maxcpus=1 pd_ignore_unused clk_ignore_unused j614s.autotest=smc-battery
           EOF
           else
             cp arch/arm64/boot/dts/apple/t6040-j614s-all.dtb "$OUT/t6040-j614s.dtb"
             cat > "$OUT/BOOTARGS.txt" <<'EOF'
-          earlycon=apple,s5l-uart console=ttySAC0,1500000 keep_bootcon ignore_loglevel loglevel=8 rdinit=/init panic=0 idle=nop arm64.nowfxt nr_cpus=1 maxcpus=1
+          earlycon=apple,s5l-uart console=ttySAC0,1500000 keep_bootcon ignore_loglevel loglevel=8 rdinit=/init panic=0 idle=nop arm64.nowfxt nr_cpus=1 maxcpus=1 pd_ignore_unused clk_ignore_unused
           EOF
           fi
 
@@ -359,14 +366,15 @@ jobs:
           J614s RAM boot profile: $PROFILE
 
           SAFE:
-            Minimal single-CPU UART/initramfs baseline. PCIe, DART, SMC,
+            Minimal single-CPU UART/screen/initramfs baseline. PCIe, DART, SMC,
             DockChannel HID, Wi-Fi, MMC, USB and NVMe are disabled.
 
           DIAGNOSTIC:
             Single CPU. Reviewed J614s SMC, MTP/input, PCIe port 0 Wi-Fi/BT
             and PCIe port 1 GL9755 SD nodes are enabled in the DTB, but their
-            drivers are modules in the RAM initramfs. Load them manually using
-            LOAD_ORDER.txt and inspect dmesg after every step.
+            drivers are modules in the RAM initramfs. This smoke bundle requests
+            only SMC/battery automatically via j614s.autotest=smc-battery.
+            Other subsystems remain staged through LOAD_ORDER.txt.
 
           YOLO:
             Reviewed J614s SMC, MTP/input, PCIe/Wi-Fi/SD nodes are enabled and
@@ -378,6 +386,8 @@ jobs:
             All current profiles force one CPU plus idle=nop + arm64.nowfxt.
             This avoids the known T6040 WFI/WFIT state-loss path and the
             still-unresolved J614s multi-core page-copy/MM failure.
+            pd_ignore_unused and clk_ignore_unused preserve firmware power
+            and clock state during this test; they do not fix PMGR timeouts.
 
           Current limitation:
             This tree still has no reviewed J614s/T6040 NVMe, USB, DCP/GPU or
@@ -389,7 +399,14 @@ jobs:
             grep -qw "$required_arg" "$OUT/BOOTARGS.txt"
           done
 
-          sha256sum "$OUT"/* > "$OUT/SHA256SUMS"
+          (
+            cd "$OUT"
+            for file in *; do
+              [ "$file" = SHA256SUMS ] && continue
+              [ -f "$file" ] && sha256sum "$file"
+            done
+          ) > "$OUT/SHA256SUMS"
+          (cd "$OUT" && sha256sum -c SHA256SUMS)
 
       - name: Upload RAM boot bundle
         uses: actions/upload-artifact@v4
