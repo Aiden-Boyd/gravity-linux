@@ -28,6 +28,14 @@ enable CONFIG_TMPFS
 
 case "$PROFILE" in
 safe)
+	# Reuse the firmware framebuffer for an observable first boot.
+	disable CONFIG_DRM_SIMPLEDRM
+	enable CONFIG_FB
+	enable CONFIG_FB_SIMPLE
+	enable CONFIG_VT
+	enable CONFIG_VT_CONSOLE
+	enable CONFIG_FRAMEBUFFER_CONSOLE
+
 	# Known-minimum rescue baseline. Do not probe DMA/storage/peripheral fabric.
 	disable CONFIG_NVME_APPLE
 	disable CONFIG_BLK_DEV_NVME
