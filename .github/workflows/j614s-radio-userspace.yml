@@ -31,10 +31,18 @@ jobs:
               awk '\''/=> \// {print $3} /^[[:space:]]*\// {print $1}'\'' /tmp/ldd.txt > /tmp/libs.txt
               while read -r library; do cp --parents -L "$library" /out; done < /tmp/libs.txt
             done
-            iw --version
-            wpa_supplicant -v
-            wpa_cli -v
-            btmgmt --help >/dev/null
+            chroot /out "$(command -v iw)" --version
+            chroot /out "$(command -v wpa_supplicant)" -v
+            chroot /out "$(command -v wpa_cli)" -v
+            # btmgmt opens a controller socket even for --help. CI has no
+            # Bluetooth management socket; require that specific startup
+            # result rather than accepting arbitrary loader failures.
+            if chroot /out "$(command -v btmgmt)" --help > /tmp/bt-check.txt 2>&1; then
+              cat /tmp/bt-check.txt
+            else
+              cat /tmp/bt-check.txt
+              grep -q "Unable to open mgmt_socket" /tmp/bt-check.txt
+            fi
             dpkg-query -W > /artifact/PACKAGE_VERSIONS.txt
             tar -czf /artifact/radio-userspace.tar.gz -C /out .
           '
