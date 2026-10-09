@@ -1,0 +1,47 @@
+name: J614s ARM64 Storage Tools
+on:
+  push:
+    branches: [j614s-nvme-probe]
+    paths: ['.github/workflows/j614s-storage-tools.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  tools:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
+    steps:
+      - name: Package ext4 tools and libraries
+        run: |
+          mkdir artifact
+          docker run --rm --platform linux/arm64 -v "$PWD/artifact:/artifact" public.ecr.aws/docker/library/ubuntu:24.04 sh -ec '
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get update -qq
+            apt-get install -y --no-install-recommends e2fsprogs util-linux
+            mkdir -p /out/etc
+            for name in mke2fs e2fsck blkid; do
+              executable=$(command -v "$name")
+              cp --parents -L "$executable" /out
+              ldd "$executable" > /tmp/ldd.txt
+              ! grep -q "not found" /tmp/ldd.txt
+              awk '\''/=> \// {print $3} /^[[:space:]]*\// {print $1}'\'' /tmp/ldd.txt > /tmp/libs.txt
+              while read -r library; do cp --parents -L "$library" /out; done < /tmp/libs.txt
+            done
+            cp /etc/mke2fs.conf /out/etc/
+            chroot /out "$(command -v mke2fs)" -V
+            chroot /out "$(command -v e2fsck)" -V
+            chroot /out "$(command -v blkid)" -V
+            # Exercise ARM64 format and read-only check on a disposable image.
+            truncate -s 128M /out/test.img
+            chroot /out "$(command -v mke2fs)" -t ext4 -F /test.img
+            chroot /out "$(command -v e2fsck)" -fn /test.img
+            rm /out/test.img
+            dpkg-query -W > /artifact/PACKAGE_VERSIONS.txt
+            tar -czf /artifact/storage-userspace.tar.gz -C /out .
+          '
+          (cd artifact && sha256sum storage-userspace.tar.gz PACKAGE_VERSIONS.txt > SHA256SUMS)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: j614s-storage-tools
+          path: artifact/*
+          if-no-files-found: error
