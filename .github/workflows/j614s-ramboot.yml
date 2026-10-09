@@ -5,6 +5,7 @@ on:
     branches:
       - j614s-ramboot-test-v1
       - j614s-first-boot-v1
+      - j614s-safe-screen-console
   workflow_dispatch:
 
 permissions:
@@ -195,6 +196,9 @@ jobs:
 
           case "$PROFILE" in
             safe)
+              for symbol in FB FB_SIMPLE VT VT_CONSOLE FRAMEBUFFER_CONSOLE; do
+                grep -qx "CONFIG_${symbol}=y" .config
+              done
               if grep -Eq '^CONFIG_(NVME_APPLE|BLK_DEV_NVME|PCIE_APPLE|APPLE_DART|MFD_MACSMC|MACSMC_POWER|SENSORS_MACSMC_HWMON|INPUT_MACSMC_INPUT|APPLE_DOCKCHANNEL|HID_DOCKCHANNEL|HID_MAGICMOUSE|BRCMFMAC|BT_HCIBCM4377|WLAN|BT|MMC|USB)=[ym]$' .config; then
                 echo "SAFE profile unexpectedly enabled a hardware-facing driver:" >&2
                 grep -E '^CONFIG_(NVME_APPLE|BLK_DEV_NVME|PCIE_APPLE|APPLE_DART|MFD_MACSMC|MACSMC_POWER|SENSORS_MACSMC_HWMON|INPUT_MACSMC_INPUT|APPLE_DOCKCHANNEL|HID_DOCKCHANNEL|HID_MAGICMOUSE|BRCMFMAC|BT_HCIBCM4377|WLAN|BT|MMC|USB)=' .config >&2 || true
@@ -253,6 +257,13 @@ jobs:
               Image modules \
               apple/t6040-j614s.dtb \
               apple/t6040-j614s-all.dtb
+          fi
+
+          if [ "$PROFILE" = safe ]; then
+            # Firmware keeps the scanout running. SAFE has no power-domain
+            # provider, so do not defer simplefb waiting for one.
+            fdtput -d arch/arm64/boot/dts/apple/t6040-j614s.dtb \
+              /chosen/framebuffer@0 power-domains
           fi
 
           gzip -n -9 -c arch/arm64/boot/Image > Image.gz
@@ -329,7 +340,7 @@ jobs:
           if [ "$PROFILE" = safe ]; then
             cp arch/arm64/boot/dts/apple/t6040-j614s.dtb "$OUT/t6040-j614s.dtb"
             cat > "$OUT/BOOTARGS.txt" <<'EOF'
-          earlycon=apple,s5l-uart console=ttySAC0,1500000 keep_bootcon ignore_loglevel loglevel=8 rdinit=/init panic=0 idle=nop arm64.nowfxt nr_cpus=1 maxcpus=1
+          earlycon=apple,s5l-uart console=ttySAC0,1500000 console=tty0 keep_bootcon ignore_loglevel loglevel=8 rdinit=/init panic=0 idle=nop arm64.nowfxt nr_cpus=1 maxcpus=1
           EOF
           elif [ "$PROFILE" = diagnostic ]; then
             cp arch/arm64/boot/dts/apple/t6040-j614s-all.dtb "$OUT/t6040-j614s.dtb"
