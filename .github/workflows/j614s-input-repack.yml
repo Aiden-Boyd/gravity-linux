@@ -23,11 +23,15 @@ jobs:
       run: |
         set -eu
         sudo apt-get update
-        sudo apt-get install -y --no-install-recommends cpio
+        sudo apt-get install -y --no-install-recommends cpio device-tree-compiler
         BUNDLE="$GITHUB_WORKSPACE/bundle"
         (cd "$BUNDLE" && sha256sum -c SHA256SUMS)
         test "$(cat "$BUNDLE/PROFILE.txt")" = diagnostic
-        sha256sum "$BUNDLE/Image.gz" "$BUNDLE/t6040-j614s.dtb" > /tmp/kernel-before.sha256
+        sha256sum "$BUNDLE/Image.gz" > /tmp/kernel-before.sha256
+        HID_NODE=/soc/fifo@514b14000/input@0
+        test "$(fdtget -t s "$BUNDLE/t6040-j614s.dtb" "$HID_NODE" compatible)" = apple,dockchannel-hid
+        fdtput -c "$BUNDLE/t6040-j614s.dtb" "$HID_NODE/stm"
+        fdtget -l "$BUNDLE/t6040-j614s.dtb" "$HID_NODE" | grep -qx stm
         mkdir ramroot
         cd ramroot
         gzip -dc "$BUNDLE/initramfs.cpio.gz" | cpio -id --no-absolute-filenames
@@ -50,7 +54,7 @@ jobs:
         assert s.count('j614s.autotest=smc-battery') == 1
         p.write_text(s.replace('j614s.autotest=smc-battery', 'j614s.autotest=input'))
         p=Path('README.txt')
-        p.write_text(p.read_text()+'\nINPUT REPACK: kernel and DTB unchanged from run 37927931468.\nThis bundle requests input modules instead of the battery autotest.\nKeyboard functionality must be demonstrated by typing on the Mac.\nTrackpad firmware is not supplied.\n')
+        p.write_text(p.read_text()+'\nINPUT REPACK: kernel unchanged from run 37927931468; DTB adds the STM child required for HID device identification.\nThis bundle requests input modules instead of the battery autotest.\nKeyboard functionality must be demonstrated by typing on the Mac.\nTrackpad firmware is not supplied.\n')
         Path('REPACK_SOURCE.txt').write_text('Base run: 37927931468\nBase commit: 0542623a5c02fa2a596b9e0bdaf4095f3d64d585\nRepack commit: '+__import__('os').environ['GITHUB_SHA']+'\n')
         PY_ARGS
         sha256sum -c /tmp/kernel-before.sha256
