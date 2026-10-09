@@ -1,0 +1,38 @@
+name: J614s NVMe Device Tree Probe
+on:
+  push:
+    branches: [j614s-nvme-probe]
+    paths:
+      - 'arch/arm64/boot/dts/apple/**'
+      - 'tools/j614s/**'
+      - '.github/workflows/j614s-nvme-probe.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  dtb:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install DT compiler
+        run: sudo apt-get update && sudo apt-get install -y device-tree-compiler
+      - name: Compile isolated storage tree
+        run: |
+          mkdir -p nvme-dt
+          gcc -E -nostdinc -undef -D__DTS__ -x assembler-with-cpp \
+            -I include -I arch/arm64/boot/dts/apple \
+            arch/arm64/boot/dts/apple/t6040-j614s-nvme.dts > /tmp/nvme.dts
+          dtc -q -I dts -O dtb -o nvme-dt/t6040-j614s.dtb /tmp/nvme.dts
+          fdtput -d nvme-dt/t6040-j614s.dtb /chosen/framebuffer@0 power-domains
+          test "$(fdtget nvme-dt/t6040-j614s.dtb /soc/nvme@44dcc0000 compatible)" = apple,t8132-nvme-ans2
+          test "$(fdtget -tx nvme-dt/t6040-j614s.dtb /soc/nvme@44dcc0000 reg)" = '4 4dcc0000 0 60000 4 9600000 0 4000'
+          sh -n tools/j614s/nvme-probe.sh
+          python3 -m py_compile tools/j614s/nvme-handoff.py tools/j614s/repack-nvme-probe.py
+          cp tools/j614s/nvme-handoff.py tools/j614s/nvme-probe.sh tools/j614s/repack-nvme-probe.py tools/j614s/net-start.sh nvme-dt/
+          (cd nvme-dt && sha256sum * > SHA256SUMS)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: j614s-nvme-dt
+          path: nvme-dt/
+          if-no-files-found: error
