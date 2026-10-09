@@ -1,6 +1,6 @@
 #!/bin/sh
 # SPDX-License-Identifier: MIT
-BB=/usr/bin/net-busybox
+BB=/usr/lib/j614s/busybox
 case "$1" in
     deconfig)
         "$BB" ifconfig "$interface" 0.0.0.0
