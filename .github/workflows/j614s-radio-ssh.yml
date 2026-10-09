@@ -1,0 +1,64 @@
+name: J614s radio SSH tools (no kernel build)
+'on':
+  push:
+    branches: [j614s-radio-ssh]
+  workflow_dispatch: {}
+permissions:
+  contents: read
+jobs:
+  tools:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+      - name: Package ARM64 tools and their shared libraries
+        run: |
+          mkdir artifact
+          docker run --rm --platform linux/arm64 -v "$PWD/artifact:/artifact" ubuntu:24.04 sh -ec '
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get update -qq
+            apt-get install -y --no-install-recommends iw wpasupplicant bluez dropbear-bin busybox-static
+            mkdir -p /out
+            for name in iw wpa_supplicant wpa_cli wpa_passphrase btmgmt dropbear dropbearkey; do
+              executable=$(command -v "$name")
+              test -x "$executable"
+              cp --parents -L "$executable" /out
+              ldd "$executable" > /tmp/ldd.txt
+              cat /tmp/ldd.txt
+              ! grep -q "not found" /tmp/ldd.txt
+              awk '\''/=> \// {print $3} /^[[:space:]]*\// {print $1}'\'' /tmp/ldd.txt > /tmp/libs.txt
+              while read -r library; do cp --parents -L "$library" /out; done < /tmp/libs.txt
+            done
+            chroot /out "$(command -v iw)" --version
+            chroot /out "$(command -v wpa_supplicant)" -v
+            chroot /out "$(command -v wpa_cli)" -v
+            # btmgmt opens a controller socket even for --help. CI has no
+            # Bluetooth management socket; require that specific startup
+            # result rather than accepting arbitrary loader failures.
+            if chroot /out "$(command -v btmgmt)" --help > /tmp/bt-check.txt 2>&1; then
+              cat /tmp/bt-check.txt
+            else
+              cat /tmp/bt-check.txt
+              grep -q "Unable to open mgmt_socket" /tmp/bt-check.txt
+            fi
+            mkdir -p /out/usr/bin
+            cp /bin/busybox /out/usr/bin/net-busybox
+            chroot /out "$(command -v dropbear)" -V
+            chroot /out "$(command -v dropbearkey)" -h > /tmp/key-check.txt 2>&1 || test "$?" -eq 1
+            grep -q ed25519 /tmp/key-check.txt
+            chroot /out /usr/bin/net-busybox --list > /tmp/applets.txt
+            grep -qx udhcpc /tmp/applets.txt
+            grep -qx ip /tmp/applets.txt
+            dpkg-query -W > /artifact/PACKAGE_VERSIONS.txt
+            tar -czf /artifact/radio-userspace.tar.gz -C /out .
+          '
+          cd artifact
+          sha256sum radio-userspace.tar.gz PACKAGE_VERSIONS.txt > SHA256SUMS
+          sha256sum -c SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: j614s-radio-ssh
+          path: artifact/*
+          if-no-files-found: error
