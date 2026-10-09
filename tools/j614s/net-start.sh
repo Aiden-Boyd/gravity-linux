@@ -36,7 +36,7 @@ if ! wpa_cli -i wlan0 -p /run/wpa_supplicant status 2>/dev/null | grep -q '^wpa_
         exit 1
     fi
 fi
-/usr/bin/net-busybox udhcpc -i wlan0 -s /bin/j614s-dhcp -n -q -t 5 -T 3 || exit 1
+/usr/lib/j614s/busybox udhcpc -i wlan0 -s /bin/j614s-dhcp -n -q -t 5 -T 3 || exit 1
 if [ ! -s /etc/dropbear/host_ed25519 ]; then
     dropbearkey -t ed25519 -f /etc/dropbear/host_ed25519 > /tmp/ssh-host-key.txt 2>&1 || exit 1
 fi
