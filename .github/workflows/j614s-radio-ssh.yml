@@ -7,16 +7,13 @@ permissions:
   contents: read
 jobs:
   tools:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 15
     steps:
-      - uses: docker/setup-qemu-action@v3
-        with:
-          platforms: arm64
       - name: Package ARM64 tools and their shared libraries
         run: |
           mkdir artifact
-          docker run --rm --platform linux/arm64 -v "$PWD/artifact:/artifact" ubuntu:24.04 sh -ec '
+          docker run --rm --platform linux/arm64 -v "$PWD/artifact:/artifact" public.ecr.aws/docker/library/ubuntu:24.04 sh -ec '
             export DEBIAN_FRONTEND=noninteractive
             apt-get update -qq
             apt-get install -y --no-install-recommends iw wpasupplicant bluez dropbear-bin busybox-static
