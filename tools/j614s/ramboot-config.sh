@@ -76,6 +76,13 @@ diagnostic|yolo)
 	enable CONFIG_DRM_SIMPLEDRM
 
 	if [ "$PROFILE" = diagnostic ]; then
+		# Diagnostic reports must remain visible before input drivers work.
+		disable CONFIG_DRM_SIMPLEDRM
+		enable CONFIG_FB
+		enable CONFIG_FB_SIMPLE
+		enable CONFIG_VT
+		enable CONFIG_VT_CONSOLE
+		enable CONFIG_FRAMEBUFFER_CONSOLE
 		# Keep hardware-facing drivers unloadable until explicitly requested.
 		module CONFIG_PINCTRL_APPLE_GPIO
 		module CONFIG_APPLE_MAILBOX
