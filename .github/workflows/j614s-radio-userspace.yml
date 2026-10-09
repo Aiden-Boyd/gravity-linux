@@ -1,0 +1,48 @@
+name: J614s radio userspace tools (no kernel build)
+'on':
+  push:
+    branches: [j614s-radio-userspace]
+  workflow_dispatch: {}
+permissions:
+  contents: read
+jobs:
+  tools:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+      - name: Package ARM64 tools and their shared libraries
+        run: |
+          mkdir artifact
+          docker run --rm --platform linux/arm64 -v "$PWD/artifact:/artifact" ubuntu:24.04 sh -ec '
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get update -qq
+            apt-get install -y --no-install-recommends iw wpasupplicant bluez
+            mkdir -p /out
+            for name in iw wpa_supplicant wpa_cli wpa_passphrase btmgmt; do
+              executable=$(command -v "$name")
+              test -x "$executable"
+              cp --parents -L "$executable" /out
+              ldd "$executable" > /tmp/ldd.txt
+              cat /tmp/ldd.txt
+              ! grep -q "not found" /tmp/ldd.txt
+              awk '\''/=> \// {print $3} /^[[:space:]]*\// {print $1}'\'' /tmp/ldd.txt > /tmp/libs.txt
+              while read -r library; do cp --parents -L "$library" /out; done < /tmp/libs.txt
+            done
+            iw --version
+            wpa_supplicant -v
+            wpa_cli -v
+            btmgmt --help >/dev/null
+            dpkg-query -W > /artifact/PACKAGE_VERSIONS.txt
+            tar -czf /artifact/radio-userspace.tar.gz -C /out .
+          '
+          cd artifact
+          sha256sum radio-userspace.tar.gz PACKAGE_VERSIONS.txt > SHA256SUMS
+          sha256sum -c SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: j614s-radio-userspace
+          path: artifact/*
+          if-no-files-found: error
