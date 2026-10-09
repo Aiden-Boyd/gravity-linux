@@ -3,6 +3,8 @@
 # Local Wi-Fi credentials, DHCP, and key-only SSH in the RAM diagnostic.
 export PATH=/usr/sbin:/usr/bin:/sbin:/bin
 umask 077
+mkdir -p /dev/pts
+grep -q ' /dev/pts ' /proc/mounts || mount -t devpts devpts /dev/pts || exit 1
 if [ ! -d /sys/class/net/wlan0 ]; then
     modprobe brcmfmac-wcc || exit 1
     j614s-diag wifi > /tmp/net-load.log 2>&1
@@ -11,13 +13,16 @@ fi
 ip link set wlan0 up || exit 1
 mkdir -p /run/wpa_supplicant /etc/dropbear
 if ! wpa_cli -i wlan0 -p /run/wpa_supplicant status 2>/dev/null | grep -q '^wpa_state=COMPLETED$'; then
+    killall wpa_supplicant 2>/dev/null || true
+    sleep 2
+    rm -f /run/wpa_supplicant/wlan0
     printf 'Wi-Fi name [Amazing_Grace_Core]: '
     read -r ssid
     ssid=${ssid:-Amazing_Grace_Core}
     printf 'Wi-Fi password (hidden): '
     trap 'stty echo' EXIT HUP INT TERM
     stty -echo
-    printf 'ctrl_interface=/run/wpa_supplicant\n' > /tmp/wifi.conf
+    printf 'disable_scan_offload=1\nctrl_interface=/run/wpa_supplicant\n' > /tmp/wifi.conf
     wpa_passphrase "$ssid" | sed '/^[[:space:]]*#psk=/d' >> /tmp/wifi.conf
     stty echo
     printf '\n'
