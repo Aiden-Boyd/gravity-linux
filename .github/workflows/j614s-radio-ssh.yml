@@ -40,12 +40,12 @@ jobs:
               cat /tmp/bt-check.txt
               grep -q "Unable to open mgmt_socket" /tmp/bt-check.txt
             fi
-            mkdir -p /out/usr/bin
-            cp /bin/busybox /out/usr/bin/net-busybox
+            mkdir -p /out/usr/lib/j614s
+            cp /bin/busybox /out/usr/lib/j614s/busybox
             chroot /out "$(command -v dropbear)" -V
             chroot /out "$(command -v dropbearkey)" -h > /tmp/key-check.txt 2>&1 || test "$?" -eq 1
             grep -q ed25519 /tmp/key-check.txt
-            chroot /out /usr/bin/net-busybox --list > /tmp/applets.txt
+            chroot /out /usr/lib/j614s/busybox --list > /tmp/applets.txt
             grep -qx udhcpc /tmp/applets.txt
             grep -qx ip /tmp/applets.txt
             dpkg-query -W > /artifact/PACKAGE_VERSIONS.txt
