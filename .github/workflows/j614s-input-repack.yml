@@ -1,0 +1,67 @@
+name: J614s input test (reuse diagnostic kernel)
+'on':
+  push:
+    branches:
+    - j614s-input-repack
+  workflow_dispatch: {}
+permissions:
+  contents: read
+  actions: read
+jobs:
+  repack:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/download-artifact@v4
+      with:
+        name: j614s-ramboot-diagnostic
+        run-id: 37927931468
+        github-token: ${{ github.token }}
+        path: bundle
+    - name: Repackage only input test and boot arguments
+      run: |
+        set -eu
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends cpio
+        BUNDLE="$GITHUB_WORKSPACE/bundle"
+        (cd "$BUNDLE" && sha256sum -c SHA256SUMS)
+        test "$(cat "$BUNDLE/PROFILE.txt")" = diagnostic
+        sha256sum "$BUNDLE/Image.gz" "$BUNDLE/t6040-j614s.dtb" > /tmp/kernel-before.sha256
+        mkdir ramroot
+        cd ramroot
+        gzip -dc "$BUNDLE/initramfs.cpio.gz" | cpio -id --no-absolute-filenames
+        python3 - <<'PY_PATCH'
+        from pathlib import Path
+        p=Path('init')
+        s=p.read_text()
+        anchor='exec setsid cttyhack sh\n'
+        assert s.count(anchor) == 1
+        patch='\ncase " $(cat /proc/cmdline) " in\n    *" j614s.autotest=input "*)\n        if [ "$PROFILE" = diagnostic ]; then\n            echo "=== J614S_INPUT_START ==="\n            if j614s-diag input; then\n                sleep 3\n                echo "=== J614S_INPUT_DEVICES ==="\n                cat /proc/bus/input/devices\n                echo "=== J614S_INPUT_MODULES_LOADED ==="\n                echo "On the Mac keyboard, type: echo KEYBOARD_OK"\n                echo "A module load alone does not prove keyboard input works."\n                echo "Trackpad firmware is not included in this test."\n            else\n                echo "=== J614S_INPUT_LOAD_FAILED ==="\n            fi\n        fi\n        ;;\nesac\n\n'
+        p.write_text(s.replace(anchor, patch+anchor))
+        PY_PATCH
+        sh -n init
+        find . -print0 | cpio --null -o --format=newc --owner=0:0 | gzip -n -9 > "$BUNDLE/initramfs.cpio.gz"
+        cd "$BUNDLE"
+        python3 - <<'PY_ARGS'
+        from pathlib import Path
+        p=Path('BOOTARGS.txt')
+        s=p.read_text()
+        assert s.count('j614s.autotest=smc-battery') == 1
+        p.write_text(s.replace('j614s.autotest=smc-battery', 'j614s.autotest=input'))
+        p=Path('README.txt')
+        p.write_text(p.read_text()+'\nINPUT REPACK: kernel and DTB unchanged from run 37927931468.\nThis bundle requests input modules instead of the battery autotest.\nKeyboard functionality must be demonstrated by typing on the Mac.\nTrackpad firmware is not supplied.\n')
+        Path('REPACK_SOURCE.txt').write_text('Base run: 37927931468\nBase commit: 0542623a5c02fa2a596b9e0bdaf4095f3d64d585\nRepack commit: '+__import__('os').environ['GITHUB_SHA']+'\n')
+        PY_ARGS
+        sha256sum -c /tmp/kernel-before.sha256
+        for file in *; do
+          [ "$file" = SHA256SUMS ] && continue
+          [ -f "$file" ] && sha256sum "$file"
+        done > SHA256SUMS
+        sha256sum -c SHA256SUMS
+        gzip -t initramfs.cpio.gz
+    - uses: actions/upload-artifact@v4
+      with:
+        name: j614s-ramboot-input
+        path: bundle/*
+        if-no-files-found: error
