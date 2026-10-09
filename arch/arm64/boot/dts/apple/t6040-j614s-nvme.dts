@@ -1,0 +1,48 @@
+// SPDX-License-Identifier: GPL-2.0+ OR MIT
+/* Isolated J614s storage probe. Addresses/IRQs from the captured J614s ADT.
+ * Uses the upstream September 2026 t8132 ANS2 driver: reg[9] exposes both
+ * NVMe and NVMMU, so map the full register aperture, not just its first page.
+ * No filesystem is mounted by this profile; NVMe is loaded explicitly.
+ */
+#include "t6040-j614s-all.dts"
+
+/ {
+	model = "Apple MacBook Pro (14-inch, M4 Pro, 2024) J614s [NVMe probe]";
+};
+
+&soc {
+	ans_mbox: mailbox@409608000 {
+		compatible = "apple,t8140-asc-mailbox", "apple,asc-mailbox-v4";
+		reg = <0x4 0x09608000 0 0x4000>;
+		interrupt-parent = <&aic>;
+		/* ADT order [1531,1530,1533,1532]; Linux is empty first. */
+		interrupts = <AIC_IRQ 1530 IRQ_TYPE_LEVEL_HIGH>,
+			     <AIC_IRQ 1531 IRQ_TYPE_LEVEL_HIGH>,
+			     <AIC_IRQ 1532 IRQ_TYPE_LEVEL_HIGH>,
+			     <AIC_IRQ 1533 IRQ_TYPE_LEVEL_HIGH>;
+		interrupt-names = "send-empty", "send-not-empty",
+				  "recv-empty", "recv-not-empty";
+		power-domains = <&ps_ans>;
+		#mbox-cells = <0>;
+	};
+
+	ans_sart: iommu@40dc50000 {
+		compatible = "apple,t6040-sart", "apple,t6000-sart";
+		reg = <0x4 0x0dc50000 0 0xc000>;
+		power-domains = <&ps_ans>;
+	};
+
+	ans_nvme: nvme@44dcc0000 {
+		compatible = "apple,t8132-nvme-ans2";
+		reg = <0x4 0x4dcc0000 0 0x60000>,
+		      <0x4 0x09600000 0 0x4000>;
+		reg-names = "nvme", "ans";
+		interrupt-parent = <&aic>;
+		interrupts = <AIC_IRQ 2583 IRQ_TYPE_LEVEL_HIGH>;
+		mboxes = <&ans_mbox>;
+		apple,sart = <&ans_sart>;
+		power-domains = <&ps_ans>, <&ps_apcie_sys_st0>, <&ps_apcie_sys_st1>;
+		power-domain-names = "ans", "apcie0", "apcie1";
+		resets = <&ps_ans>;
+	};
+};
