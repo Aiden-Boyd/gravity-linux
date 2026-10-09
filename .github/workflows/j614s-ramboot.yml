@@ -137,10 +137,11 @@ jobs:
           grep -q '4512000000' arch/arm64/boot/dts/apple/t6040-j614s-all.dts
           grep -q 'performance-domains = <&cpufreq_p0>' arch/arm64/boot/dts/apple/t6040-j614s-all.dts
 
-          # A new stage1 candidate is being rebuilt and repinned. Until its
-          # immutable hash is committed, normal install mode must fail closed.
-          grep -q "^STAGE1_REPIN_PENDING=1$" tools/j614s/installer/bootstrap.sh
-          grep -q "repin is pending" tools/j614s/installer/bootstrap.sh
+          # The reviewed j614s.4 stage1 is now pinned. Validate that state
+          # and its immutable binary hash instead of the former pending state.
+          grep -qx 'STAGE1_REPIN_PENDING=0' tools/j614s/installer/bootstrap.sh
+          grep -qx 'M1N1_STAGE1_SHA256="29c9ac4542577e88e58734075d069835afac1a6b4db8b16b7aa7000942196411"' tools/j614s/installer/bootstrap.sh
+          grep -qx 'M1N1_STAGE1_SIZE="3866624"' tools/j614s/installer/bootstrap.sh
           ! grep -q "m1n1-stage2-v1.9.9" tools/j614s/installer/bootstrap.sh
 
       - name: Install build dependencies
