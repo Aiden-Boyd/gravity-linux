@@ -14,7 +14,8 @@ jobs:
       - name: Package ext4 tools and libraries
         run: |
           mkdir artifact
-          docker run --rm --platform linux/arm64 -v "$PWD/artifact:/artifact" public.ecr.aws/docker/library/ubuntu:24.04 sh -ec '
+          sudo ln -s "$PWD/artifact" /artifact
+          sudo sh -ec '
             export DEBIAN_FRONTEND=noninteractive
             apt-get update -qq
             apt-get install -y --no-install-recommends e2fsprogs util-linux
