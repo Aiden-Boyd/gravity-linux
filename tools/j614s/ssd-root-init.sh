@@ -15,6 +15,7 @@ echo 'GRAVITY SSD ROOT: '
 grep ' / ' /proc/mounts
 if [ -s /etc/wpa_supplicant.conf ]; then
     (
+        modprobe brcmfmac-wcc || exit 1
         j614s-diag wifi > /tmp/net-load.log 2>&1
         ip link set wlan0 up || exit 1
         wpa_supplicant -B -i wlan0 -c /etc/wpa_supplicant.conf -f /tmp/wpa.log || exit 1
