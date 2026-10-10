@@ -1,0 +1,54 @@
+name: J614s standalone SSD m1n1
+on:
+  push:
+    branches: [j614s-nvme-probe]
+    paths:
+      - .github/workflows/j614s-m1n1-ssd.yml
+      - tools/j614s/m1n1/patch-ssd-payload.py
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: gravity
+      - uses: actions/checkout@v4
+        with:
+          repository: AsahiLinux/m1n1
+          ref: 809541515659bf4e504807fd72bc0a539be5eee7
+          submodules: recursive
+          path: m1n1
+      - name: Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu
+          rustup toolchain install 1.98.1 --profile minimal
+          rustup default 1.98.1
+          rustup target add aarch64-unknown-none-softfloat
+      - name: Patch and build twice
+        env:
+          M1N1_VERSION_TAG: v1.9.9-j614s-ssd.1
+        run: |
+          python3 gravity/tools/j614s/m1n1/patch-v1.9.9-j614s.py m1n1
+          python3 gravity/tools/j614s/m1n1/patch-ssd-payload.py m1n1
+          git -C m1n1 diff --check
+          make -C m1n1 -j2 ARCH=aarch64-linux-gnu- RELEASE=1 CHAINLOADING=1
+          cp m1n1/build/m1n1.bin /tmp/first.bin
+          make -C m1n1 clean
+          make -C m1n1 -j2 ARCH=aarch64-linux-gnu- RELEASE=1 CHAINLOADING=1
+          cmp /tmp/first.bin m1n1/build/m1n1.bin
+          mkdir artifact
+          cp m1n1/build/m1n1.bin artifact/
+          cp gravity/tools/j614s/pack-standalone.py artifact/
+          git -C m1n1 diff > artifact/m1n1-ssd.diff
+          cd artifact
+          sha256sum m1n1.bin pack-standalone.py m1n1-ssd.diff > SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: j614s-m1n1-ssd
+          path: artifact/
+          if-no-files-found: error
