@@ -26,3 +26,16 @@ text = text.replace(old, '''    if (kernel && fdt) {
         }
         cpufreq_init();''')
 path.write_text(text)
+
+# Show the cold-boot path before payload parsing; embedded kernels normally hide it.
+path = Path(sys.argv[1]) / 'src/main.c'
+text = path.read_text()
+old = '    fb_display_logo();\n'
+assert text.count(old) == 1
+text = text.replace(old, old + '''    if (chip_id == T6040) {
+        fb_set_active(true);
+        printf("J614S_SSD_DIAG: framebuffer enabled before payload processing\\n");
+        mdelay(3000);
+    }
+''')
+path.write_text(text)
