@@ -11,7 +11,19 @@ set -eu
 payload=$1
 [ -s "$payload" ] && [ -s "$payload.sha256" ]
 directory=$(dirname "$payload")
-(cd "$directory" && shasum -a 256 -c "$(basename "$payload").sha256")
+if command -v shasum >/dev/null 2>&1; then
+    (cd "$directory" && shasum -a 256 -c "$(basename "$payload").sha256")
+elif command -v openssl >/dev/null 2>&1; then
+    expected=$(awk 'NR == 1 {print $1}' "$payload.sha256")
+    actual=$(openssl dgst -sha256 "$payload" | awk '{print $NF}')
+    [ -n "$expected" ] && [ "$actual" = "$expected" ] || {
+        echo 'STOP: standalone payload checksum mismatch'; exit 1;
+    }
+    echo 'Standalone payload SHA256: OK'
+else
+    echo 'STOP: neither shasum nor openssl is available; checksum not verified.'
+    exit 1
+fi
 volume='/Volumes/Gravity Linux J614s Dev'
 [ -d "$volume" ]
 info=$(diskutil info -plist "$volume")
