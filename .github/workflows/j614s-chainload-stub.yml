@@ -1,0 +1,38 @@
+name: J614s compiler-free chainload stub
+on:
+  push:
+    branches: [j614s-nvme-probe]
+    paths:
+      - .github/workflows/j614s-chainload-stub.yml
+      - tools/j614s/chainload-stub.S
+      - tools/j614s/chainload-prebuilt.py
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y binutils-aarch64-linux-gnu
+      - name: Assemble and verify stub
+        run: |
+          mkdir artifact
+          aarch64-linux-gnu-as -march=armv8.4-a tools/j614s/chainload-stub.S -o /tmp/stub.o
+          test "$(aarch64-linux-gnu-readelf -r /tmp/stub.o | grep -c 'There are no relocations')" = 1
+          aarch64-linux-gnu-objcopy -j .text -O binary /tmp/stub.o artifact/chainload-stub.bin
+          test "$(wc -c < artifact/chainload-stub.bin)" = 48
+          aarch64-linux-gnu-objdump -d /tmp/stub.o > artifact/chainload-stub.disassembly.txt
+          cp tools/j614s/chainload-prebuilt.py artifact/
+          cp tools/j614s/chainload-stub.S artifact/
+          python3 -m py_compile artifact/chainload-prebuilt.py
+          cd artifact
+          sha256sum chainload-stub.bin chainload-prebuilt.py chainload-stub.S chainload-stub.disassembly.txt > SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: j614s-chainload-stub
+          path: |
+            artifact/chainload-stub.bin
+            artifact/chainload-prebuilt.py
+            artifact/chainload-stub.S
+            artifact/chainload-stub.disassembly.txt
+            artifact/SHA256SUMS
