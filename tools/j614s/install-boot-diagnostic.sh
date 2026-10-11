@@ -6,8 +6,6 @@ export PATH=/usr/bin:/bin:/usr/sbin:/sbin
 [ "$(uname -s)" = Darwin ] && [ "$(sysctl -n hw.model)" = Mac16,8 ]
 [ "$#" = 1 ] && [ "$1" = --install ] || { echo "Usage: sh install-boot-diagnostic.sh --install"; exit 2; }
 [ "$(id -u)" = 0 ] || { echo "Run in Recovery Terminal."; exit 1; }
-# An ordinary macOS installation must not perform this step.
-[ ! -d /System/Volumes/Data ] || { echo "STOP: use macOS Recovery Terminal."; exit 1; }
 data_uuid=1B517D62-C96F-4CC6-BD52-6320F1AC845D
 system_uuid=7BB3DC62-3D93-4B51-8D8B-A922DE5E5CCB
 diskutil mount "$data_uuid"
@@ -32,6 +30,27 @@ mkdir -p "$out"
 find /Library/Logs/DiagnosticReports -type f -name '*socd*.panic' -exec cp {} "$out/" \;
 ls -lh "$out"
 sync
+
+# Check the target's Recovery authorization, not whether Data happens to be mounted.
+policy=$(mktemp /tmp/gravity-policy.XXXXXX)
+if ! bputil -d -v 1B517D62-C96F-4CC6-BD52-6320F1AC845D >"$policy"; then
+    rm -f "$policy"
+    echo 'STOP: unable to read Gravity boot policy.'; exit 1
+fi
+if ! grep -q ': Paired' "$policy"; then
+    rm -f "$policy"
+    echo 'STOP: this Recovery session is not paired with Gravity.'
+    echo 'Make Gravity the default startup OS, shut down, then hold Power continuously to enter its Recovery.'
+    exit 1
+fi
+if ! grep -q 'one true recoveryOS' "$policy"; then
+    rm -f "$policy"
+    echo 'STOP: this session is not physical-presence Recovery (1TR).'
+    echo 'Shut down, then hold Power continuously from power-off to Startup Options.'
+    exit 1
+fi
+rm -f "$policy"
+
 echo "Installing experimental diagnostic payload in the Gravity entry."
 echo "This changes only Gravity's custom boot object and its associated boot policy."
 kmutil configure-boot -c "$payload" --raw --entry-point 2048 --lowest-virtual-address 0 -v "$system"
