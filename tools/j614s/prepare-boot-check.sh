@@ -61,7 +61,7 @@ data=$(diskutil info -plist 1B517D62-C96F-4CC6-BD52-6320F1AC845D | plutil -extra
 out="$data/boot-check/recovery-report"
 mkdir -p "$out"
 find /Library/Logs/DiagnosticReports -type f -name '*socd*.panic' -exec cp {} "$out/" \;
-bputil -d > "$out/boot-policy.txt" 2>&1 || true
+bputil -d -v 1B517D62-C96F-4CC6-BD52-6320F1AC845D > "$out/boot-policy.txt" 2>&1 || true
 ls -lh "$out"
 sync
 echo "Report saved on Gravity Data. Boot Macintosh HD and upload the files in boot-check/recovery-report."
@@ -70,7 +70,7 @@ RECOVERY
 # Reuse the existing tested Linux/DT/initramfs bytes; change only the m1n1 prefix.
 if command -v gh >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1; then
   mkdir -p "$work/diagnostic-build"
-  if gh run download 38051370707 -R Aiden-Boyd/gravity-linux -n j614s-m1n1-ssd -D "$work/diagnostic-build" >> "$report" 2>&1; then
+  if gh run download 38145738943 -R Aiden-Boyd/gravity-linux -n j614s-m1n1-ssd -D "$work/diagnostic-build" >> "$report" 2>&1; then
     if python3 - "$data/standalone/gravity-standalone.bin" "$work/diagnostic-build" "$stage" >> "$report" 2>&1 <<'PY'
 import hashlib, pathlib, sys
 source, build, stage = map(pathlib.Path, sys.argv[1:])
